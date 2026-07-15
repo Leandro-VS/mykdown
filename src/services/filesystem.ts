@@ -1,11 +1,7 @@
+import { invoke } from "@tauri-apps/api/core";
 import { basename, join } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
-import {
-  readDir,
-  readTextFile,
-  stat,
-  writeTextFile,
-} from "@tauri-apps/plugin-fs";
+import { readDir, readTextFile, stat, watch } from "@tauri-apps/plugin-fs";
 import type { MarkdownDocument, MarkdownTreeNode } from "../types/files";
 import { isMarkdownFile, sortMarkdownTree } from "../utils/files";
 
@@ -76,17 +72,45 @@ export async function readMarkdownDocument(
 export async function saveMarkdownDocument(
   path: string,
   content: string,
+  expectedModifiedAt: number | null,
 ): Promise<number | null> {
   requireTauri();
-  await writeTextFile(path, content);
-  const metadata = await stat(path);
-  return metadata.mtime?.getTime() ?? null;
+  const result = await invoke<{ modifiedAt: number }>("save_document_atomic", {
+    path,
+    content,
+    expectedModifiedAt,
+  });
+  return result.modifiedAt;
 }
 
 export async function getFileModifiedAt(path: string): Promise<number | null> {
   requireTauri();
   const metadata = await stat(path);
   return metadata.mtime?.getTime() ?? null;
+}
+
+export async function watchMarkdownPath(
+  path: string,
+  onChange: () => void,
+  recursive = false,
+): Promise<() => void> {
+  requireTauri();
+  return watch(
+    path,
+    (event) => {
+      if (
+        event.type === "any" ||
+        event.type === "other" ||
+        (typeof event.type === "object" &&
+          ("modify" in event.type ||
+            "remove" in event.type ||
+            "create" in event.type))
+      ) {
+        onChange();
+      }
+    },
+    { delayMs: 250, recursive },
+  );
 }
 
 export async function scanMarkdownFolder(
