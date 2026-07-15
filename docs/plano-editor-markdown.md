@@ -1,12 +1,12 @@
 # Plano: Editor de Markdown Minimalista para macOS
 
-Um editor de markdown desktop, elegante como o Inkdrop, mas sem vault, sem importação e sem local fixo de notas: você abre qualquer pasta do seu Mac (como no VS Code) e ele lista apenas os arquivos `.md`, ou abre um arquivo avulso direto. Nome de trabalho sugerido: **Marli** (markdown + light) — troque à vontade.
+O **Mykdown** é um editor de Markdown desktop, elegante como o Inkdrop, mas sem vault, sem importação e sem local fixo de notas: você abre qualquer pasta do seu Mac (como no VS Code) e ele lista apenas os arquivos `.md`, ou abre um arquivo avulso direto. O nome representa “my Markdown”: um editor pessoal para o uso diário.
 
 ---
 
 ## 1. Requisitos
 
-**Funcionais (MVP)**
+**Funcionais (versão oficial 1.0)**
 
 - Abrir uma pasta qualquer via diálogo nativo do macOS e listar, em uma sidebar, somente arquivos `.md` / `.markdown` (recursivo, preservando a hierarquia de subpastas que contêm markdown).
 - Abrir um arquivo `.md` avulso, sem pasta, direto no editor.
@@ -14,13 +14,26 @@ Um editor de markdown desktop, elegante como o Inkdrop, mas sem vault, sem impor
 - Três modos de visualização com toggle na toolbar: **só editor**, **lado a lado**, **só preview**.
 - Salvar com `Cmd+S`, indicador visual de "não salvo" (dot no título, como apps nativos de Mac).
 - Lista de pastas/arquivos recentes na tela inicial.
+- Núcleo de extensões com um registro de plugins interno, para que editor, preview e comandos possam ganhar recursos sem acoplá-los ao app principal.
+- Criar, renomear e excluir arquivos Markdown pela sidebar, sempre com confirmação nas operações destrutivas.
+- Detectar mudanças externas no filesystem e impedir sobrescrita silenciosa de conflitos.
+- Busca rápida de arquivo por nome com `Cmd+P`.
+- Scroll sincronizado no modo dividido, temas claro/escuro e exportação para HTML/PDF.
+- Integração completa com o macOS: Finder, Dock, associação de arquivos e instância única.
 
 **Não funcionais**
 
 - App leve (abrir em < 1s, binário pequeno), visual polido e coeso, atalhos de teclado nativos de macOS.
 - Nenhum banco de dados, nenhum índice, nenhum estado escondido: o filesystem é a fonte da verdade. Fechar e abrir o app não pode "perder" nada além de preferências de UI.
 
-**Fora de escopo por enquanto**: sync, plugins, tags, busca full-text, outros formatos de arquivo.
+**Plugins planejados**
+
+- O primeiro plugin oficial será **Mermaid**, renderizando no preview os blocos cercados identificados com a linguagem `mermaid`.
+- A versão 1.0 incluirá plugins oficiais compilados junto com o Mykdown e plugins locais de terceiros, ambos ativáveis nas preferências.
+- Plugins locais usarão manifesto e API versionada. Eles não receberão acesso direto às APIs do Tauri ou ao filesystem; toda capacidade deverá ser concedida pelo host.
+- Pontos de extensão da versão oficial: renderizadores de blocos Markdown, extensões do CodeMirror, comandos/atalhos e temas.
+
+**Fora de escopo por enquanto**: sync, tags, busca full-text, outros formatos de arquivo e marketplace online de plugins.
 
 ---
 
@@ -33,10 +46,10 @@ Um editor de markdown desktop, elegante como o Inkdrop, mas sem vault, sem impor
 | Tamanho do app | ~8–15 MB | ~150–250 MB | ~5 MB |
 | RAM em uso | Baixa (WKWebView nativo) | Alta (Chromium embutido) | Mínima |
 | Ecossistema de editor/preview md | Excelente (é web) | Excelente | Fraco (teria que construir muito na mão) |
-| Curva para você | Quase zero Rust no MVP | Zero novidade | Swift do zero |
+| Curva para você | Rust pontual e isolado | Zero novidade | Swift do zero |
 | Estética "Inkdrop" | Total controle via CSS | Total controle | Difícil replicar |
 
-O Inkdrop em si é Electron, mas o que dá a ele a cara elegante é o CSS e a tipografia — nada que dependa do Electron. O Tauri entrega o mesmo controle visual usando a WKWebView que já existe no macOS, então o app fica com "peso" de app nativo. E o ponto decisivo: **no MVP você não precisa escrever Rust**. Os plugins oficiais `dialog` (abrir pasta/arquivo) e `fs` (ler/escrever/listar) são chamados direto do TypeScript. Rust só entra na fase 2 (file watching), e mesmo lá é um plugin pronto (`tauri-plugin-fs-watch` / crate `notify`).
+O Inkdrop em si é Electron, mas o que dá a ele a cara elegante é o CSS e a tipografia — nada que dependa do Electron. O Tauri entrega o mesmo controle visual usando a WKWebView que já existe no macOS, então o app fica com "peso" de app nativo. Os plugins oficiais `dialog` e `fs` serão chamados do TypeScript; commands Rust pequenos e testáveis serão usados desde o início onde aumentarem a confiabilidade, como gravação atômica, metadados e operações críticas do filesystem.
 
 Trade-off honesto: o debugging do Tauri é um pouco menos maduro que o do Electron, e se um dia você quiser algo muito exótico de sistema, escreverá um command em Rust. Para este escopo, é o custo certo a pagar pela leveza.
 
@@ -68,7 +81,7 @@ Trade-off honesto: o debugging do Tauri é um pouco menos maduro que o do Electr
 └───────┬────────────────────────────────────────────┘
         │ @tauri-apps/plugin-dialog / plugin-fs
         ▼
-  Núcleo Rust do Tauri (sem código seu no MVP)
+  Núcleo Rust do Tauri + commands de filesystem seguros
         ▼
   Filesystem do macOS
 ```
@@ -110,9 +123,11 @@ Acento verde-jade em vez do roxo/azul do Inkdrop: mantém a mesma temperatura ca
 
 ---
 
-## 5. Fases de implementação
+## 5. Construção da versão oficial
 
-### Fase 0 — Bootstrap (1 sessão)
+Não haverá uma linha de produto “MVP”. As etapas abaixo são incrementos internos da mesma versão `1.0.0`; nenhuma delas será tratada como aplicativo final até cumprir todos os critérios de produção.
+
+### Etapa 0 — Fundação
 
 Pré-requisitos no Mac: Xcode Command Line Tools, Rust via rustup, Node 20+.
 
@@ -120,8 +135,8 @@ Pré-requisitos no Mac: Xcode Command Line Tools, Rust via rustup, Node 20+.
 xcode-select --install          # se ainda não tiver
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-npm create tauri-app@latest marli -- --template react-ts
-cd marli
+npm create tauri-app@latest mykdown -- --template react-ts
+cd mykdown
 npm install @codemirror/state @codemirror/view @codemirror/lang-markdown \
   @codemirror/commands @lezer/highlight \
   unified remark-parse remark-gfm remark-rehype rehype-sanitize rehype-react \
@@ -132,7 +147,7 @@ npm run tauri dev               # janela abre → bootstrap ok
 
 Critério de pronto: janela abre com hot reload funcionando.
 
-### Fase 1 — MVP funcional (2–4 sessões)
+### Etapa 1 — Núcleo de edição
 
 1. Layout base: sidebar + área principal + toolbar, com os tokens de design aplicados.
 2. Abrir arquivo avulso: diálogo → `readTextFile` → CodeMirror renderizando com highlight de markdown.
@@ -140,22 +155,26 @@ Critério de pronto: janela abre com hot reload funcionando.
 4. Preview: pipeline remark/rehype com debounce, e o toggle dos 3 modos.
 5. Abrir pasta: varredura recursiva filtrada, árvore na sidebar, troca de arquivo (com guarda de dirty).
 
-Critério de pronto: você consegue abandonar o editor atual para escrever markdown do dia a dia.
+Critério de pronto: o núcleo de edição está confiável, testado e pronto para receber as demais capacidades da versão 1.0.
 
-### Fase 2 — Qualidade de vida
+### Etapa 2 — Experiência diária completa
 
 Recentes persistidos (`tauri-plugin-store`); criar/renomear/deletar `.md` pela sidebar; file watching para refletir mudanças externas na árvore e avisar se o arquivo aberto mudou no disco; scroll sincronizado entre editor e preview no modo split; tema claro + toggle.
 
-### Fase 3 — Refino e distribuição
+### Etapa 3 — Plugins, integração e distribuição
 
-Busca de arquivo por nome (`Cmd+P`, fuzzy, estilo VS Code); export para HTML/PDF; `npm run tauri build` para gerar o `.app`/`.dmg`; assinatura ad-hoc para uso pessoal (notarização só se for distribuir).
+Plugin Mermaid, carregamento seguro de plugins locais, busca de arquivo por nome (`Cmd+P`, fuzzy, estilo VS Code), export para HTML/PDF, integração com Finder/Dock e `npm run tauri build` para gerar o `.app`; assinatura ad-hoc para uso pessoal.
+
+### Etapa 4 — Release candidate e versão 1.0.0
+
+Executar o app como editor principal, eliminar falhas encontradas, validar todos os testes e instalar o bundle definitivo em `/Applications/Mykdown.app`. Somente então criar a tag `v1.0.0`.
 
 ---
 
 ## 6. Riscos e pontos de atenção
 
 - **Pastas enormes**: a varredura recursiva é o único ponto com risco de latência. A lista de diretórios ignorados resolve o comum; se um dia precisar, move-se a varredura para um command Rust com `ignore` crate (mesma engine do ripgrep) — melhoria isolada, não muda a arquitetura.
-- **Scroll sync do split**: mapear linha do editor ↔ posição do preview é o problema clássico de editores md. Por isso está na fase 2, com solução aproximada por proporção antes de tentar mapeamento por bloco.
+- **Scroll sync do split**: mapear linha do editor ↔ posição do preview é o problema clássico de editores md. A versão 1.0 começará com sincronização por blocos e fallback proporcional.
 - **HTML dentro do markdown**: sempre passar pelo `rehype-sanitize`. Preview renderiza numa webview com acesso a APIs do Tauri; sanitizar não é opcional.
 - **Conflito de escrita externa**: se o arquivo mudou no disco enquanto estava aberto e dirty, nunca sobrescrever silenciosamente — dialog de escolha (manter meu / recarregar). Fail-safe primeiro, como nos seus guardrails.
 
