@@ -13,10 +13,10 @@ import {
   Columns2,
   FilePlus2,
   FileText,
-  Folder,
   FolderOpen,
   FolderCog,
   FolderPlus,
+  House,
   LoaderCircle,
   PanelLeft,
   Save,
@@ -85,6 +85,7 @@ import {
 } from "./services/localPlugins";
 import { selectIsDirty, useWorkspaceStore } from "./store/workspace";
 import type { MarkdownTreeNode, ViewMode } from "./types/files";
+import { getSaoPauloGreeting } from "./utils/greeting";
 import { flattenMarkdownFiles } from "./utils/search";
 import { reachedSynchronizedScrollTarget } from "./utils/scrollSync";
 
@@ -94,7 +95,7 @@ type ExternalChange =
   { kind: "modified"; modifiedAt: number } | { kind: "removed" };
 
 type WorkspaceDialogState =
-  | { kind: "create-file"; parentPath: string }
+  | { kind: "create-file"; parentPath: string; openAsWorkspace?: boolean }
   | { kind: "create-folder"; parentPath: string }
   | { kind: "rename"; node: MarkdownTreeNode }
   | { kind: "delete"; node: MarkdownTreeNode };
@@ -300,6 +301,40 @@ export default function App() {
     [performOpenFolder, runOrDefer],
   );
 
+  const performCreateDocumentFromHome = useCallback(async () => {
+    setError(null);
+    try {
+      const path = await chooseMarkdownFolder();
+      if (!path) return;
+      setWorkspaceDialog({
+        kind: "create-file",
+        parentPath: path,
+        openAsWorkspace: true,
+      });
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível escolher a pasta do novo arquivo.",
+      );
+    }
+  }, [setError]);
+
+  const handleCreateDocumentFromHome = useCallback(
+    () => runOrDefer(performCreateDocumentFromHome),
+    [performCreateDocumentFromHome, runOrDefer],
+  );
+
+  const performShowHome = useCallback(async () => {
+    setRoot(null, []);
+    setExternalChange(null);
+  }, [setRoot]);
+
+  const handleShowHome = useCallback(
+    () => runOrDefer(performShowHome),
+    [performShowHome, runOrDefer],
+  );
+
   const openDocumentAtPath = useCallback(
     async (path: string) => {
       if (path === activePath) return;
@@ -371,13 +406,22 @@ export default function App() {
   }, [rootDir, updateTree]);
 
   const handleCreateFile = useCallback(
-    async (parentPath: string, name: string) => {
+    async (parentPath: string, name: string, openAsWorkspace = false) => {
       await runOrDefer(async () => {
         setBusy(true);
         setError(null);
         try {
           const path = await createMarkdownDocument(parentPath, name);
-          await refreshWorkspaceTree();
+          if (openAsWorkspace) {
+            setRoot(parentPath, await scanMarkdownFolder(parentPath));
+            await recordRecent({
+              kind: "folder",
+              path: parentPath,
+              name: displayPathName(parentPath),
+            });
+          } else {
+            await refreshWorkspaceTree();
+          }
           const document = await readMarkdownDocument(path);
           loadDocument(document);
           setExternalChange(null);
@@ -395,7 +439,14 @@ export default function App() {
         }
       });
     },
-    [loadDocument, refreshWorkspaceTree, runOrDefer, setBusy, setError],
+    [
+      loadDocument,
+      refreshWorkspaceTree,
+      runOrDefer,
+      setBusy,
+      setError,
+      setRoot,
+    ],
   );
 
   const handleCreateFolder = useCallback(
@@ -504,7 +555,11 @@ export default function App() {
       setWorkspaceDialog(null);
 
       if (dialog.kind === "create-file" && value) {
-        await handleCreateFile(dialog.parentPath, value);
+        await handleCreateFile(
+          dialog.parentPath,
+          value,
+          dialog.openAsWorkspace,
+        );
       } else if (dialog.kind === "create-folder" && value) {
         await handleCreateFolder(dialog.parentPath, value);
       } else if (dialog.kind === "rename" && value) {
@@ -587,13 +642,14 @@ export default function App() {
       } else if (rootDir) {
         setWorkspaceDialog({ kind: "create-file", parentPath: rootDir });
       } else {
-        setError("Abra uma pasta antes de criar um arquivo.");
+        void handleCreateDocumentFromHome();
       }
     },
     [
       activeName,
       handleOpenFile,
       handleOpenFolder,
+      handleCreateDocumentFromHome,
       handleSave,
       rootDir,
       runOrDefer,
@@ -659,27 +715,12 @@ export default function App() {
             Math.min(240, Math.max(16, persisted.session.previewMargin)),
           );
         }
-        setBusy(true);
-        if (persisted.session.rootDir) {
-          setRoot(
-            persisted.session.rootDir,
-            await scanMarkdownFolder(persisted.session.rootDir),
-          );
-        } else {
-          setRoot(null, []);
-        }
-        if (persisted.session.activePath) {
-          loadDocument(
-            await readMarkdownDocument(persisted.session.activePath),
-          );
-        }
       } catch {
         if (!cancelled) {
-          setError("A sessão anterior não pôde ser restaurada por completo.");
+          setError("As preferências anteriores não puderam ser restauradas.");
         }
       } finally {
         if (!cancelled) {
-          setBusy(false);
           setPersistenceReady(true);
         }
       }
@@ -688,7 +729,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [loadDocument, setBusy, setError, setRoot, setViewMode]);
+  }, [setError, setViewMode]);
 
   useEffect(() => {
     if (!persistenceReady || !isRunningInTauri()) return;
@@ -936,6 +977,14 @@ export default function App() {
         </div>
         <div className="titlebar-actions">
           <IconButton
+            label="Início"
+            disabled={!rootDir && !activePath}
+            onClick={() => void handleShowHome()}
+          >
+            <House size={16} />
+          </IconButton>
+          <span className="toolbar-divider" />
+          <IconButton
             label="Abrir arquivo (⌘O)"
             onClick={() => void handleOpenFile()}
           >
@@ -1038,6 +1087,7 @@ export default function App() {
           {!activePath && !rootDir ? (
             <WelcomeScreen
               recents={recents}
+              onCreateFile={handleCreateDocumentFromHome}
               onOpenFile={handleOpenFile}
               onOpenFolder={handleOpenFolder}
               onOpenRecent={handleOpenRecent}
@@ -1264,6 +1314,7 @@ function ViewModeButtons({ viewMode, onChange }: ViewModeButtonsProps) {
 
 type WelcomeScreenProps = {
   recents: RecentItem[];
+  onCreateFile: () => Promise<void>;
   onOpenFile: () => Promise<void>;
   onOpenFolder: () => Promise<void>;
   onOpenRecent: (recent: RecentItem) => Promise<void>;
@@ -1271,26 +1322,41 @@ type WelcomeScreenProps = {
 
 function WelcomeScreen({
   recents,
+  onCreateFile,
   onOpenFile,
   onOpenFolder,
   onOpenRecent,
 }: WelcomeScreenProps) {
+  const [greeting, setGreeting] = useState(() => getSaoPauloGreeting());
+  const recentFiles = recents.filter((recent) => recent.kind === "file");
+
+  useEffect(() => {
+    const interval = window.setInterval(
+      () => setGreeting(getSaoPauloGreeting()),
+      60_000,
+    );
+    return () => window.clearInterval(interval);
+  }, []);
+
   return (
     <section className="welcome-screen">
       <div className="welcome-mark" aria-hidden="true">
         M<span>↓</span>
       </div>
       <div className="welcome-copy">
-        <span className="eyebrow">MY MARKDOWN</span>
-        <h1>Escreva onde seus arquivos já vivem.</h1>
-        <p>
-          Sem vault, sem importação e sem lock-in. Abra uma pasta ou um arquivo
-          Markdown do seu Mac e comece.
-        </p>
+        <h1>{greeting}</h1>
+        <p>Meu Editor de Markdown</p>
       </div>
       <div className="welcome-actions">
         <button
           className="primary-button"
+          type="button"
+          onClick={() => void onCreateFile()}
+        >
+          <FilePlus2 size={17} /> Novo arquivo
+        </button>
+        <button
+          className="secondary-button"
           type="button"
           onClick={() => void onOpenFolder()}
         >
@@ -1305,21 +1371,17 @@ function WelcomeScreen({
         </button>
       </div>
       <div className="recent-section">
-        <span className="eyebrow">RECENTES</span>
-        {recents.length > 0 ? (
+        <span className="eyebrow">ARQUIVOS RECENTES</span>
+        {recentFiles.length > 0 ? (
           <div className="recent-list">
-            {recents.map((recent) => (
+            {recentFiles.map((recent) => (
               <button
                 type="button"
                 className="recent-row"
                 key={recent.path}
                 onClick={() => void onOpenRecent(recent)}
               >
-                {recent.kind === "folder" ? (
-                  <Folder size={16} />
-                ) : (
-                  <FileText size={16} />
-                )}
+                <FileText size={16} />
                 <span className="recent-name">{recent.name}</span>
                 <span className="recent-path">{recent.path}</span>
               </button>
