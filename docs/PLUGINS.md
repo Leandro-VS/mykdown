@@ -1,7 +1,18 @@
 # Plugins do Mykdown
 
-O Mykdown 1.0 possui plugins oficiais empacotados e plugins locais de preview.
-Mermaid e Flowchart são oficiais e podem ser ativados nas preferências.
+O Mykdown possui plugins oficiais empacotados e plugins locais de preview.
+Mermaid, Flowchart e o Pacote de temas são oficiais e podem ser ativados nas
+preferências.
+
+## Pacote oficial de temas
+
+O Pacote de temas adiciona **Nord**, **Dracula** e **Coffee** ao seletor em
+**Preferências → Aparência → Tema**. Ele pode ser desligado separadamente na
+seção **Plugins oficiais**.
+
+Os temas são declarativos: cada um fornece somente uma paleta de tokens visuais
+predefinidos pelo Mykdown. Eles não executam JavaScript e não recebem acesso ao
+DOM ou ao filesystem.
 
 ## Plugin local API 1
 

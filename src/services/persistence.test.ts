@@ -53,12 +53,13 @@ describe("mergePreferences", () => {
         officialPlugins: { mermaid: false } as {
           mermaid: boolean;
           flowchart: boolean;
+          themePack: boolean;
         },
       }),
     ).toEqual({
       ...DEFAULT_PREFERENCES,
       theme: "light",
-      officialPlugins: { mermaid: false, flowchart: true },
+      officialPlugins: { mermaid: false, flowchart: true, themePack: true },
     });
   });
 });

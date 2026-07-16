@@ -1,4 +1,4 @@
-# Smoke test do Mykdown 1.0
+# Smoke test do Mykdown
 
 Execute este checklist no bundle instalado em `/Applications/Mykdown.app` antes
 de cada release.
@@ -27,9 +27,11 @@ de cada release.
 
 ## Preferências e exportação
 
-- testar tema do sistema, claro e escuro;
+- testar tema do sistema, claro, escuro, Nord, Dracula e Coffee;
+- desativar o Pacote de temas enquanto um tema dele está ativo e confirmar o
+  retorno automático ao tema escuro;
 - mudar fonte, altura de linha, wrap e autosave;
-- desativar e reativar Mermaid e Flowchart;
+- desativar e reativar Mermaid, Flowchart e Pacote de temas;
 - exportar HTML e abrir o resultado offline;
 - imprimir ou salvar o preview como PDF.
 

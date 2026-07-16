@@ -18,8 +18,11 @@ export type SessionSnapshot = {
   previewMargin: number;
 };
 
+export type ThemePreference =
+  "system" | "dark" | "light" | "nord" | "dracula" | "coffee";
+
 export type AppPreferences = {
-  theme: "system" | "dark" | "light";
+  theme: ThemePreference;
   editorFontSize: number;
   editorLineHeight: number;
   wordWrap: boolean;
@@ -28,6 +31,7 @@ export type AppPreferences = {
   officialPlugins: {
     mermaid: boolean;
     flowchart: boolean;
+    themePack: boolean;
   };
   localPluginEnabled: Record<string, boolean>;
   safeMode: boolean;
@@ -40,7 +44,7 @@ export const DEFAULT_PREFERENCES: AppPreferences = {
   wordWrap: true,
   syncScroll: true,
   autoSave: false,
-  officialPlugins: { mermaid: true, flowchart: true },
+  officialPlugins: { mermaid: true, flowchart: true, themePack: true },
   localPluginEnabled: {},
   safeMode: false,
 };

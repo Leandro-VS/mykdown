@@ -15,8 +15,13 @@ export function MermaidBlock({ code }: CodeBlockRendererProps) {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const updateTheme = () => {
       const preference = document.documentElement.dataset.theme ?? "system";
+      const pluginUsesDarkScheme = getComputedStyle(
+        document.documentElement,
+      ).colorScheme.includes("dark");
       setTheme(
-        preference === "dark" || (preference === "system" && media.matches)
+        preference === "dark" ||
+          pluginUsesDarkScheme ||
+          (preference === "system" && media.matches)
           ? "dark"
           : "default",
       );
@@ -24,7 +29,7 @@ export function MermaidBlock({ code }: CodeBlockRendererProps) {
     const observer = new MutationObserver(updateTheme);
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["data-theme"],
+      attributeFilter: ["data-theme", "style"],
     });
     media.addEventListener("change", updateTheme);
     updateTheme();

@@ -76,6 +76,11 @@ import {
   activateMermaidPlugin,
   deactivateMermaidPlugin,
 } from "./plugins/mermaid";
+import {
+  activateThemePackPlugin,
+  deactivateThemePackPlugin,
+  THEME_PACK_THEMES,
+} from "./plugins/theme-pack";
 import { activateLocalPlugins } from "./plugins/local/runtime";
 import type { LocalPluginDescriptor } from "./plugins/local/types";
 import {
@@ -83,6 +88,7 @@ import {
   openLocalPluginsDirectory,
   removeLocalPlugin,
 } from "./services/localPlugins";
+import { applyAppTheme } from "./services/theme";
 import { selectIsDirty, useWorkspaceStore } from "./store/workspace";
 import type { MarkdownTreeNode, ViewMode } from "./types/files";
 import { getSaoPauloGreeting } from "./utils/greeting";
@@ -737,13 +743,19 @@ export default function App() {
   }, [activePath, persistenceReady, previewMargin, rootDir, viewMode]);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = preferences.theme;
-  }, [preferences.theme]);
-
-  useEffect(() => {
     if (!persistenceReady || !isRunningInTauri()) return;
     void persistPreferences(preferences);
   }, [persistenceReady, preferences]);
+
+  useEffect(() => {
+    if (preferences.officialPlugins.themePack) activateThemePackPlugin();
+    else deactivateThemePackPlugin();
+    return deactivateThemePackPlugin;
+  }, [preferences.officialPlugins.themePack]);
+
+  useEffect(() => {
+    applyAppTheme(preferences.theme);
+  }, [preferences.officialPlugins.themePack, preferences.theme]);
 
   useEffect(() => {
     if (preferences.officialPlugins.mermaid) activateMermaidPlugin();
@@ -1558,6 +1570,13 @@ function PreferencesDialog({
                 <option value="system">Seguir o sistema</option>
                 <option value="dark">Escuro</option>
                 <option value="light">Claro</option>
+                {preferences.officialPlugins.themePack
+                  ? THEME_PACK_THEMES.map((theme) => (
+                      <option key={theme.id} value={theme.id}>
+                        {theme.name}
+                      </option>
+                    ))
+                  : null}
               </select>
             </label>
             <label className="preference-slider">
@@ -1639,6 +1658,24 @@ function PreferencesDialog({
                   officialPlugins: {
                     ...preferences.officialPlugins,
                     flowchart,
+                  },
+                })
+              }
+            />
+            <PreferenceToggle
+              label="Pacote de temas"
+              description="Adiciona Nord, Dracula e Coffee."
+              checked={preferences.officialPlugins.themePack}
+              onChange={(themePack) =>
+                update({
+                  theme:
+                    !themePack &&
+                    ["nord", "dracula", "coffee"].includes(preferences.theme)
+                      ? "dark"
+                      : preferences.theme,
+                  officialPlugins: {
+                    ...preferences.officialPlugins,
+                    themePack,
                   },
                 })
               }
