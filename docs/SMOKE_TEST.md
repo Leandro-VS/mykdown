@@ -1,7 +1,7 @@
 # Smoke test do Mykdown 1.0
 
 Execute este checklist no bundle instalado em `/Applications/Mykdown.app` antes
-da tag `v1.0.0`.
+de cada release.
 
 ## Arquivos e sessão
 
@@ -46,4 +46,4 @@ da tag `v1.0.0`.
 - executar `npm run release:check`;
 - fechar o Mykdown e executar `npm run install:local`;
 - confirmar que preferências e recentes permanecem;
-- manter o release candidate como editor principal por pelo menos uma semana.
+- confirmar a versão exibida como `1.0.0` no bundle instalado.

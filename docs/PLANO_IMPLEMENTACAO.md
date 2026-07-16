@@ -1,9 +1,8 @@
 # Plano de implementação do Mykdown
 
-> **Estado atual:** todas as entregas funcionais previstas foram implementadas
-> no release candidate `1.0.0-rc.1`. A única condição que não pode ser
-> automatizada é a semana de uso diário da Etapa 9; ela deve ser executada com
-> o checklist em `docs/SMOKE_TEST.md` antes da tag final `v1.0.0`.
+> **Estado atual:** todas as entregas funcionais e a estabilização foram
+> concluídas. A versão oficial `1.0.0` foi aprovada para lançamento e é validada
+> pelo checklist reproduzível em `docs/SMOKE_TEST.md`.
 
 ## 1. Objetivo prático
 
@@ -330,7 +329,7 @@ Critério de pronto: todos os testes e smoke checks passam no bundle instalado, 
 - Branch principal: `main`, sempre compilável.
 - Commits pequenos por entrega, por exemplo `feat: add markdown file picker`.
 - Branches curtas apenas para mudanças arriscadas; pull request não é obrigatório num projeto individual.
-- Checkpoints internos usam prereleases como `v1.0.0-alpha.1`, `v1.0.0-beta.1` e `v1.0.0-rc.1`; a primeira versão oficial será `v1.0.0`.
+- Checkpoints internos usaram prereleases como `v1.0.0-alpha.1`, `v1.0.0-beta.1` e `v1.0.0-rc.1`; a primeira versão oficial é `v1.0.0`.
 - Nunca versionar `node_modules`, `target`, builds, logs, `.env` ou certificados.
 - O lockfile do npm e `Cargo.lock` devem ser versionados para builds reproduzíveis.
 - Antes de instalar uma versão: `npm run lint`, `npm test`, `cargo test` e build release.

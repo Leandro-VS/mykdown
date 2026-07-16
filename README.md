@@ -2,18 +2,18 @@
 
 Editor Markdown minimalista para macOS, pensado para abrir arquivos e pastas comuns do sistema sem vault, importação ou banco de dados.
 
-O projeto está em implementação rumo à versão oficial `1.0.0`. O filesystem é a fonte da verdade e o primeiro alvo é exclusivamente um Mac Apple Silicon para uso pessoal. Não haverá um MVP separado ou descartável: toda implementação fará parte da base de produção.
+O Mykdown está na versão oficial `1.0.0`. O filesystem é a fonte da verdade e o primeiro alvo é exclusivamente um Mac Apple Silicon para uso pessoal. Não houve um MVP separado ou descartável: toda implementação faz parte da base de produção.
 
-O release candidate atual é `1.0.0-rc.1`, com editor e preview, Mermaid,
-Flowchart, busca fuzzy, sessão persistente, integração com Finder, temas,
-exportação HTML/PDF e plugins locais isolados.
+A versão oficial inclui editor e preview, Mermaid, Flowchart, busca fuzzy,
+sessão persistente, integração com Finder, temas, exportação HTML/PDF e
+plugins locais isolados.
 
 ## Documentação
 
 - [Visão e requisitos](./docs/plano-editor-markdown.md)
 - [Plano de implementação](./docs/PLANO_IMPLEMENTACAO.md)
 - [Desenvolvimento de plugins](./docs/PLUGINS.md)
-- [Checklist do release candidate](./docs/SMOKE_TEST.md)
+- [Checklist de release](./docs/SMOKE_TEST.md)
 
 ## Stack definida
 
