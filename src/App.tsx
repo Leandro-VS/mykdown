@@ -86,6 +86,7 @@ import {
 import { selectIsDirty, useWorkspaceStore } from "./store/workspace";
 import type { MarkdownTreeNode, ViewMode } from "./types/files";
 import { flattenMarkdownFiles } from "./utils/search";
+import { reachedSynchronizedScrollTarget } from "./utils/scrollSync";
 
 type DeferredAction = () => Promise<void>;
 
@@ -163,7 +164,7 @@ export default function App() {
   const drainOpenRequestsRef = useRef<() => void>(() => undefined);
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const previewPaneRef = useRef<HTMLElement>(null);
-  const isSynchronizingScroll = useRef(false);
+  const synchronizedPreviewTargetRef = useRef<number | null>(null);
 
   const handleSave = useCallback(async (): Promise<boolean> => {
     if (!activePath || !isDirty) {
@@ -889,43 +890,34 @@ export default function App() {
   );
   const showSidebar = rootDir !== null;
 
-  const releaseScrollSync = () => {
-    requestAnimationFrame(() => {
-      isSynchronizingScroll.current = false;
-    });
-  };
-
   const handleEditorScroll = (ratio: number) => {
     const preview = previewPaneRef.current;
-    if (
-      !preferences.syncScroll ||
-      viewMode !== "split" ||
-      !preview ||
-      isSynchronizingScroll.current
-    ) {
+    if (!preferences.syncScroll || viewMode !== "split" || !preview) {
       return;
     }
-    isSynchronizingScroll.current = true;
-    preview.scrollTop = ratio * (preview.scrollHeight - preview.clientHeight);
-    releaseScrollSync();
+    const target = ratio * (preview.scrollHeight - preview.clientHeight);
+    if (reachedSynchronizedScrollTarget(preview.scrollTop, target)) return;
+    synchronizedPreviewTargetRef.current = target;
+    preview.scrollTop = target;
   };
 
   const handlePreviewScroll = () => {
     const preview = previewPaneRef.current;
-    if (
-      !preferences.syncScroll ||
-      viewMode !== "split" ||
-      !preview ||
-      isSynchronizingScroll.current
-    ) {
+    if (!preferences.syncScroll || viewMode !== "split" || !preview) {
       return;
     }
+    const synchronizedTarget = synchronizedPreviewTargetRef.current;
+    if (
+      reachedSynchronizedScrollTarget(preview.scrollTop, synchronizedTarget)
+    ) {
+      synchronizedPreviewTargetRef.current = null;
+      return;
+    }
+    synchronizedPreviewTargetRef.current = null;
     const maximum = preview.scrollHeight - preview.clientHeight;
-    isSynchronizingScroll.current = true;
     editorRef.current?.scrollToRatio(
       maximum > 0 ? preview.scrollTop / maximum : 0,
     );
-    releaseScrollSync();
   };
 
   return (

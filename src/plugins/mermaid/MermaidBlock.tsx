@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import DOMPurify from "dompurify";
 import type { CodeBlockRendererProps } from "../registry";
+import { createMermaidConfig } from "./config";
 
 export function MermaidBlock({ code }: CodeBlockRendererProps) {
   const reactId = useId();
@@ -40,12 +41,7 @@ export function MermaidBlock({ code }: CodeBlockRendererProps) {
       try {
         setError(null);
         const { default: mermaid } = await import("mermaid");
-        mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: "strict",
-          theme,
-          flowchart: { htmlLabels: false },
-        });
+        mermaid.initialize(createMermaidConfig(theme));
 
         const diagramId = `mykdown-mermaid-${reactId.replaceAll(":", "")}`;
         const result = await mermaid.render(diagramId, code);

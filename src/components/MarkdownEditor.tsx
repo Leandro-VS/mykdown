@@ -9,6 +9,7 @@ import { basicSetup } from "codemirror";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { reachedSynchronizedScrollTarget } from "../utils/scrollSync";
 
 type MarkdownEditorProps = {
   value: string;
@@ -71,6 +72,7 @@ export const MarkdownEditor = forwardRef<
   const onChangeRef = useRef(onChange);
   const onScrollRef = useRef(onScroll);
   const initialValueRef = useRef(value);
+  const synchronizedScrollTargetRef = useRef<number | null>(null);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -84,7 +86,10 @@ export const MarkdownEditor = forwardRef<
         const scroller = editorRef.current?.scrollDOM;
         if (!scroller) return;
         const maximum = scroller.scrollHeight - scroller.clientHeight;
-        scroller.scrollTop = Math.max(0, Math.min(1, ratio)) * maximum;
+        const target = Math.max(0, Math.min(1, ratio)) * maximum;
+        if (reachedSynchronizedScrollTarget(scroller.scrollTop, target)) return;
+        synchronizedScrollTargetRef.current = target;
+        scroller.scrollTop = target;
       },
       focus() {
         editorRef.current?.focus();
@@ -113,6 +118,17 @@ export const MarkdownEditor = forwardRef<
 
     const view = new EditorView({ state, parent: containerRef.current });
     const handleScroll = () => {
+      const synchronizedTarget = synchronizedScrollTargetRef.current;
+      if (
+        reachedSynchronizedScrollTarget(
+          view.scrollDOM.scrollTop,
+          synchronizedTarget,
+        )
+      ) {
+        synchronizedScrollTargetRef.current = null;
+        return;
+      }
+      synchronizedScrollTargetRef.current = null;
       const maximum = view.scrollDOM.scrollHeight - view.scrollDOM.clientHeight;
       onScrollRef.current?.(
         maximum > 0 ? view.scrollDOM.scrollTop / maximum : 0,
