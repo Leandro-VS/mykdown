@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { FileTree } from "./components/FileTree";
+import { CurrentWeatherIcon } from "./components/CurrentWeatherIcon";
 import { IconButton } from "./components/IconButton";
 import {
   MarkdownEditor,
@@ -1356,6 +1357,7 @@ function WelcomeScreen({
         M<span>↓</span>
       </div>
       <div className="welcome-copy">
+        <CurrentWeatherIcon />
         <h1>{greeting}</h1>
         <p>Leitor e Editor de markdown minimalista</p>
       </div>

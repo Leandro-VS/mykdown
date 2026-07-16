@@ -5,6 +5,8 @@ de cada release.
 
 ## Arquivos e sessão
 
+- abrir a Home conectado e confirmar o ícone do clima atual de São Paulo;
+- abrir a Home sem conexão e confirmar que a consulta não bloqueia o app;
 - abrir arquivo e pasta pelos diálogos;
 - abrir `.md` e `.markdown` pelo Finder com o app fechado e aberto;
 - criar, renomear e excluir arquivos pela sidebar;

@@ -787,6 +787,37 @@ a:focus-visible {
   color: var(--accent);
 }
 
+.current-weather {
+  width: max-content;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+}
+
+.current-weather-pending {
+  color: var(--text-faint);
+  opacity: 0.6;
+}
+
+.weather-icon-shell {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+
+.weather-attribution {
+  color: var(--text-faint);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .welcome-copy h1 {
   max-width: 540px;
   margin: 10px 0 12px;
