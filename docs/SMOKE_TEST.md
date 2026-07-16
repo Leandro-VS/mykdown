@@ -47,6 +47,8 @@ de cada release.
 
 ## Instalação
 
+- arrastar a janela pela barra superior e confirmar que os botões continuam
+  clicáveis;
 - executar `npm run release:check`;
 - fechar o Mykdown e executar `npm run install:local`;
 - confirmar que preferências e recentes permanecem;

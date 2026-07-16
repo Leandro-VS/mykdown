@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
 } from "react";
 import {
   BookOpen,
@@ -944,6 +945,15 @@ export default function App() {
   );
   const showSidebar = rootDir !== null;
 
+  const handleTitlebarMouseDown = (event: ReactMouseEvent<HTMLElement>) => {
+    if (!isRunningInTauri() || event.button !== 0) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button, input, select, textarea, a, [role='button']")) {
+      return;
+    }
+    void getCurrentWindow().startDragging();
+  };
+
   const handleEditorScroll = (ratio: number) => {
     const preview = previewPaneRef.current;
     if (!preferences.syncScroll || viewMode !== "split" || !preview) {
@@ -976,12 +986,12 @@ export default function App() {
 
   return (
     <div className={`app-shell ${showSidebar ? "has-sidebar" : ""}`}>
-      <header className="titlebar" data-tauri-drag-region>
-        <div className="brand" data-tauri-drag-region>
+      <header className="titlebar" onMouseDown={handleTitlebarMouseDown}>
+        <div className="brand">
           <span className="brand-mark">M↓</span>
           <span>Mykdown</span>
         </div>
-        <div className="document-title" data-tauri-drag-region>
+        <div className="document-title">
           {activeName ??
             (rootDir ? displayPathName(rootDir) : "Seus textos, no seu Mac")}
           {isDirty ? (
