@@ -15,19 +15,28 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  FolderCog,
   FolderPlus,
   LoaderCircle,
   PanelLeft,
   Save,
+  Search,
+  Settings2,
   SlidersHorizontal,
+  RefreshCw,
+  Trash2,
   TriangleAlert,
   X,
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { FileTree } from "./components/FileTree";
 import { IconButton } from "./components/IconButton";
-import { MarkdownEditor } from "./components/MarkdownEditor";
+import {
+  MarkdownEditor,
+  type MarkdownEditorHandle,
+} from "./components/MarkdownEditor";
 import { MarkdownPreview } from "./components/MarkdownPreview";
+import { QuickOpenDialog } from "./components/QuickOpenDialog";
 import {
   chooseMarkdownFile,
   chooseMarkdownFolder,
@@ -42,6 +51,7 @@ import {
   scanMarkdownFolder,
   watchMarkdownPath,
 } from "./services/filesystem";
+import { exportPreviewAsHtml, exportPreviewAsPdf } from "./services/export";
 import {
   listenForNativeMenu,
   listenForOpenFileRequests,
@@ -49,14 +59,33 @@ import {
   type NativeMenuAction,
 } from "./services/integration";
 import {
+  DEFAULT_PREFERENCES,
+  persistPreferences,
   persistSession,
   readPersistedState,
   recordRecent,
   removeRecent,
+  type AppPreferences,
   type RecentItem,
 } from "./services/persistence";
+import {
+  activateFlowchartPlugin,
+  deactivateFlowchartPlugin,
+} from "./plugins/flowchart";
+import {
+  activateMermaidPlugin,
+  deactivateMermaidPlugin,
+} from "./plugins/mermaid";
+import { activateLocalPlugins } from "./plugins/local/runtime";
+import type { LocalPluginDescriptor } from "./plugins/local/types";
+import {
+  listLocalPlugins,
+  openLocalPluginsDirectory,
+  removeLocalPlugin,
+} from "./services/localPlugins";
 import { selectIsDirty, useWorkspaceStore } from "./store/workspace";
 import type { MarkdownTreeNode, ViewMode } from "./types/files";
+import { flattenMarkdownFiles } from "./utils/search";
 
 type DeferredAction = () => Promise<void>;
 
@@ -122,11 +151,19 @@ export default function App() {
   const [previewMargin, setPreviewMargin] = useState(DEFAULT_PREVIEW_MARGIN);
   const [workspaceDialog, setWorkspaceDialog] =
     useState<WorkspaceDialogState | null>(null);
+  const [isQuickOpen, setIsQuickOpen] = useState(false);
+  const [preferences, setPreferences] =
+    useState<AppPreferences>(DEFAULT_PREFERENCES);
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [localPlugins, setLocalPlugins] = useState<LocalPluginDescriptor[]>([]);
   const ignoreWatchUntil = useRef(0);
   const nativeMenuActionRef = useRef<(action: NativeMenuAction) => void>(
     () => undefined,
   );
   const drainOpenRequestsRef = useRef<() => void>(() => undefined);
+  const editorRef = useRef<MarkdownEditorHandle>(null);
+  const previewPaneRef = useRef<HTMLElement>(null);
+  const isSynchronizingScroll = useRef(false);
 
   const handleSave = useCallback(async (): Promise<boolean> => {
     if (!activePath || !isDirty) {
@@ -164,6 +201,15 @@ export default function App() {
     setBusy,
     setError,
   ]);
+
+  const refreshLocalPlugins = useCallback(async () => {
+    if (!isRunningInTauri()) return;
+    try {
+      setLocalPlugins(await listLocalPlugins());
+    } catch {
+      setError("Não foi possível carregar os plugins locais.");
+    }
+  }, [setError]);
 
   const runOrDefer = useCallback(
     async (action: DeferredAction) => {
@@ -509,6 +555,30 @@ export default function App() {
         void handleOpenFolder();
       } else if (action === "save") {
         void handleSave();
+      } else if (action === "quick-open") {
+        if (tree.length > 0) setIsQuickOpen(true);
+      } else if (action === "preferences") {
+        setShowPreferences(true);
+      } else if (action === "export-html") {
+        if (!activeName) {
+          setError("Abra um documento antes de exportar.");
+        } else {
+          void exportPreviewAsHtml(activeName).catch((cause) => {
+            setError(
+              cause instanceof Error
+                ? cause.message
+                : "Falha ao exportar HTML.",
+            );
+          });
+        }
+      } else if (action === "export-pdf") {
+        try {
+          exportPreviewAsPdf();
+        } catch (cause) {
+          setError(
+            cause instanceof Error ? cause.message : "Falha ao exportar PDF.",
+          );
+        }
       } else if (action === "quit") {
         void runOrDefer(async () => {
           await getCurrentWindow().destroy();
@@ -520,12 +590,14 @@ export default function App() {
       }
     },
     [
+      activeName,
       handleOpenFile,
       handleOpenFolder,
       handleSave,
       rootDir,
       runOrDefer,
       setError,
+      tree.length,
     ],
   );
 
@@ -577,6 +649,7 @@ export default function App() {
         const persisted = await readPersistedState();
         if (cancelled) return;
         setRecents(persisted.recents);
+        setPreferences(persisted.preferences);
         if (!persisted.session) return;
 
         setViewMode(persisted.session.viewMode);
@@ -620,6 +693,48 @@ export default function App() {
     if (!persistenceReady || !isRunningInTauri()) return;
     void persistSession({ rootDir, activePath, viewMode, previewMargin });
   }, [activePath, persistenceReady, previewMargin, rootDir, viewMode]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = preferences.theme;
+  }, [preferences.theme]);
+
+  useEffect(() => {
+    if (!persistenceReady || !isRunningInTauri()) return;
+    void persistPreferences(preferences);
+  }, [persistenceReady, preferences]);
+
+  useEffect(() => {
+    if (preferences.officialPlugins.mermaid) activateMermaidPlugin();
+    else deactivateMermaidPlugin();
+    return deactivateMermaidPlugin;
+  }, [preferences.officialPlugins.mermaid]);
+
+  useEffect(() => {
+    if (preferences.officialPlugins.flowchart) activateFlowchartPlugin();
+    else deactivateFlowchartPlugin();
+    return deactivateFlowchartPlugin;
+  }, [preferences.officialPlugins.flowchart]);
+
+  useEffect(() => {
+    if (!persistenceReady) return;
+    void refreshLocalPlugins();
+  }, [persistenceReady, refreshLocalPlugins]);
+
+  useEffect(
+    () =>
+      activateLocalPlugins(
+        localPlugins,
+        preferences.localPluginEnabled,
+        preferences.safeMode,
+      ),
+    [localPlugins, preferences.localPluginEnabled, preferences.safeMode],
+  );
+
+  useEffect(() => {
+    if (!preferences.autoSave || !activePath || !isDirty) return;
+    const timeout = window.setTimeout(() => void handleSave(), 1_500);
+    return () => window.clearTimeout(timeout);
+  }, [activePath, handleSave, isDirty, preferences.autoSave]);
 
   useEffect(() => {
     if (!isRunningInTauri() || !rootDir) return;
@@ -706,7 +821,10 @@ export default function App() {
       if (!event.metaKey) return;
 
       const key = event.key.toLocaleLowerCase();
-      if (key === "s" && !isRunningInTauri()) {
+      if (key === "p") {
+        event.preventDefault();
+        if (tree.length > 0) setIsQuickOpen(true);
+      } else if (key === "s" && !isRunningInTauri()) {
         event.preventDefault();
         void handleSave();
       } else if (key === "o" && event.shiftKey && !isRunningInTauri()) {
@@ -729,7 +847,7 @@ export default function App() {
 
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [handleOpenFile, handleOpenFolder, handleSave, setViewMode]);
+  }, [handleOpenFile, handleOpenFolder, handleSave, setViewMode, tree.length]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -764,11 +882,51 @@ export default function App() {
     () => (draftContent.length === 0 ? 0 : draftContent.split("\n").length),
     [draftContent],
   );
+  const searchableFiles = useMemo(() => flattenMarkdownFiles(tree), [tree]);
   const wordCount = useMemo(
     () => draftContent.trim().split(/\s+/).filter(Boolean).length,
     [draftContent],
   );
   const showSidebar = rootDir !== null;
+
+  const releaseScrollSync = () => {
+    requestAnimationFrame(() => {
+      isSynchronizingScroll.current = false;
+    });
+  };
+
+  const handleEditorScroll = (ratio: number) => {
+    const preview = previewPaneRef.current;
+    if (
+      !preferences.syncScroll ||
+      viewMode !== "split" ||
+      !preview ||
+      isSynchronizingScroll.current
+    ) {
+      return;
+    }
+    isSynchronizingScroll.current = true;
+    preview.scrollTop = ratio * (preview.scrollHeight - preview.clientHeight);
+    releaseScrollSync();
+  };
+
+  const handlePreviewScroll = () => {
+    const preview = previewPaneRef.current;
+    if (
+      !preferences.syncScroll ||
+      viewMode !== "split" ||
+      !preview ||
+      isSynchronizingScroll.current
+    ) {
+      return;
+    }
+    const maximum = preview.scrollHeight - preview.clientHeight;
+    isSynchronizingScroll.current = true;
+    editorRef.current?.scrollToRatio(
+      maximum > 0 ? preview.scrollTop / maximum : 0,
+    );
+    releaseScrollSync();
+  };
 
   return (
     <div className={`app-shell ${showSidebar ? "has-sidebar" : ""}`}>
@@ -798,6 +956,21 @@ export default function App() {
             <FolderOpen size={16} />
           </IconButton>
           <span className="toolbar-divider" />
+          <IconButton
+            label="Preferências"
+            onClick={() => setShowPreferences(true)}
+          >
+            <Settings2 size={16} />
+          </IconButton>
+          {showSidebar ? (
+            <IconButton
+              label="Buscar arquivo (⌘P)"
+              disabled={searchableFiles.length === 0}
+              onClick={() => setIsQuickOpen(true)}
+            >
+              <Search size={16} />
+            </IconButton>
+          ) : null}
           <ViewModeButtons viewMode={viewMode} onChange={setViewMode} />
           <IconButton
             label="Salvar (⌘S)"
@@ -891,19 +1064,41 @@ export default function App() {
               {viewMode !== "preview" ? (
                 <section className="editor-pane" aria-label="Editor Markdown">
                   <MarkdownEditor
-                    key={activePath}
+                    ref={editorRef}
+                    key={`${activePath}:${preferences.wordWrap}`}
                     value={draftContent}
                     onChange={updateDraft}
+                    onScroll={handleEditorScroll}
+                    fontSize={preferences.editorFontSize}
+                    lineHeight={preferences.editorLineHeight}
+                    wordWrap={preferences.wordWrap}
                   />
                 </section>
               ) : null}
               {viewMode !== "editor" ? (
-                <section className="preview-pane" aria-label="Preview Markdown">
-                  <MarkdownPreview content={draftContent} />
+                <section
+                  ref={previewPaneRef}
+                  className="preview-pane"
+                  aria-label="Preview Markdown"
+                  onScroll={handlePreviewScroll}
+                >
+                  <MarkdownPreview
+                    content={draftContent}
+                    documentPath={activePath}
+                    onOpenDocument={(path) => void openDocumentAtPath(path)}
+                  />
                 </section>
               ) : null}
             </div>
           )}
+          {activePath && viewMode === "editor" ? (
+            <div className="export-preview-host" aria-hidden="true">
+              <MarkdownPreview
+                content={draftContent}
+                documentPath={activePath}
+              />
+            </div>
+          ) : null}
         </main>
       </div>
 
@@ -989,6 +1184,47 @@ export default function App() {
           busy={isBusy}
           onConfirm={(value) => void submitWorkspaceDialog(value)}
           onCancel={() => setWorkspaceDialog(null)}
+        />
+      ) : null}
+
+      {isQuickOpen ? (
+        <QuickOpenDialog
+          files={searchableFiles}
+          onSelect={(path) => {
+            setIsQuickOpen(false);
+            void openDocumentAtPath(path);
+          }}
+          onClose={() => setIsQuickOpen(false)}
+        />
+      ) : null}
+
+      {showPreferences ? (
+        <PreferencesDialog
+          preferences={preferences}
+          localPlugins={localPlugins}
+          onChange={setPreferences}
+          onReloadPlugins={() => void refreshLocalPlugins()}
+          onOpenPluginsFolder={() =>
+            void openLocalPluginsDirectory().catch(() =>
+              setError("Não foi possível abrir a pasta de plugins."),
+            )
+          }
+          onRemovePlugin={(id, name) => {
+            if (!window.confirm(`Remover o plugin local “${name}”?`)) return;
+            void removeLocalPlugin(id)
+              .then(() => {
+                setPreferences((current) => {
+                  const localPluginEnabled = {
+                    ...current.localPluginEnabled,
+                  };
+                  delete localPluginEnabled[id];
+                  return { ...current, localPluginEnabled };
+                });
+                return refreshLocalPlugins();
+              })
+              .catch(() => setError("Não foi possível remover o plugin."));
+          }}
+          onClose={() => setShowPreferences(false)}
         />
       ) : null}
 
@@ -1206,6 +1442,268 @@ function WorkspaceActionDialog({
         </div>
       </form>
     </div>
+  );
+}
+
+function PreferencesDialog({
+  preferences,
+  localPlugins,
+  onChange,
+  onReloadPlugins,
+  onOpenPluginsFolder,
+  onRemovePlugin,
+  onClose,
+}: {
+  preferences: AppPreferences;
+  localPlugins: LocalPluginDescriptor[];
+  onChange: (preferences: AppPreferences) => void;
+  onReloadPlugins: () => void;
+  onOpenPluginsFolder: () => void;
+  onRemovePlugin: (id: string, name: string) => void;
+  onClose: () => void;
+}) {
+  const update = (patch: Partial<AppPreferences>) =>
+    onChange({ ...preferences, ...patch });
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <section
+        className="preferences-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="preferences-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span className="eyebrow">MYKDOWN</span>
+            <h2 id="preferences-title">Preferências</h2>
+          </div>
+          <button
+            type="button"
+            aria-label="Fechar preferências"
+            onClick={onClose}
+          >
+            <X size={17} />
+          </button>
+        </header>
+
+        <div className="preferences-grid">
+          <section>
+            <h3>Aparência</h3>
+            <label className="preference-row">
+              <span>Tema</span>
+              <select
+                value={preferences.theme}
+                onChange={(event) =>
+                  update({
+                    theme: event.currentTarget.value as AppPreferences["theme"],
+                  })
+                }
+              >
+                <option value="system">Seguir o sistema</option>
+                <option value="dark">Escuro</option>
+                <option value="light">Claro</option>
+              </select>
+            </label>
+            <label className="preference-slider">
+              <span>
+                Tamanho do editor{" "}
+                <output>{preferences.editorFontSize}px</output>
+              </span>
+              <input
+                type="range"
+                min="11"
+                max="22"
+                value={preferences.editorFontSize}
+                onChange={(event) =>
+                  update({ editorFontSize: Number(event.currentTarget.value) })
+                }
+              />
+            </label>
+            <label className="preference-slider">
+              <span>
+                Altura da linha{" "}
+                <output>{preferences.editorLineHeight.toFixed(2)}</output>
+              </span>
+              <input
+                type="range"
+                min="1.35"
+                max="2.2"
+                step="0.05"
+                value={preferences.editorLineHeight}
+                onChange={(event) =>
+                  update({
+                    editorLineHeight: Number(event.currentTarget.value),
+                  })
+                }
+              />
+            </label>
+          </section>
+
+          <section>
+            <h3>Editor</h3>
+            <PreferenceToggle
+              label="Quebrar linhas longas"
+              checked={preferences.wordWrap}
+              onChange={(wordWrap) => update({ wordWrap })}
+            />
+            <PreferenceToggle
+              label="Sincronizar rolagem"
+              checked={preferences.syncScroll}
+              onChange={(syncScroll) => update({ syncScroll })}
+            />
+            <PreferenceToggle
+              label="Salvar automaticamente"
+              description="Salva 1,5 segundo depois da última alteração."
+              checked={preferences.autoSave}
+              onChange={(autoSave) => update({ autoSave })}
+            />
+          </section>
+
+          <section>
+            <h3>Plugins oficiais</h3>
+            <PreferenceToggle
+              label="Mermaid"
+              description="Diagramas em blocos ```mermaid."
+              checked={preferences.officialPlugins.mermaid}
+              onChange={(mermaid) =>
+                update({
+                  officialPlugins: {
+                    ...preferences.officialPlugins,
+                    mermaid,
+                  },
+                })
+              }
+            />
+            <PreferenceToggle
+              label="Flowchart"
+              description="Fluxogramas em blocos ```flowchart."
+              checked={preferences.officialPlugins.flowchart}
+              onChange={(flowchart) =>
+                update({
+                  officialPlugins: {
+                    ...preferences.officialPlugins,
+                    flowchart,
+                  },
+                })
+              }
+            />
+          </section>
+
+          <section className="local-plugins-section">
+            <div className="preference-section-heading">
+              <div>
+                <h3>Plugins locais</h3>
+                <p>
+                  Executados isoladamente, com limite de tempo e sem acesso ao
+                  filesystem.
+                </p>
+              </div>
+              <div>
+                <button type="button" onClick={onOpenPluginsFolder}>
+                  <FolderCog size={14} /> Abrir pasta
+                </button>
+                <button type="button" onClick={onReloadPlugins}>
+                  <RefreshCw size={14} /> Recarregar
+                </button>
+              </div>
+            </div>
+            <PreferenceToggle
+              label="Modo seguro"
+              description="Inicia sem executar nenhum plugin local."
+              checked={preferences.safeMode}
+              onChange={(safeMode) => update({ safeMode })}
+            />
+            <div className="local-plugin-list">
+              {localPlugins.length ? (
+                localPlugins.map((plugin) => {
+                  const manifest = plugin.manifest;
+                  return (
+                    <div
+                      className="local-plugin-row"
+                      key={plugin.directoryName}
+                    >
+                      <div>
+                        <strong>
+                          {manifest?.name ?? plugin.directoryName}
+                        </strong>
+                        <small>
+                          {plugin.error ??
+                            `${manifest?.language} · API ${manifest?.apiVersion} · v${manifest?.version}`}
+                        </small>
+                      </div>
+                      {manifest && !plugin.error ? (
+                        <input
+                          type="checkbox"
+                          aria-label={`Ativar ${manifest.name}`}
+                          disabled={preferences.safeMode}
+                          checked={Boolean(
+                            preferences.localPluginEnabled[manifest.id],
+                          )}
+                          onChange={(event) =>
+                            update({
+                              localPluginEnabled: {
+                                ...preferences.localPluginEnabled,
+                                [manifest.id]: event.currentTarget.checked,
+                              },
+                            })
+                          }
+                        />
+                      ) : null}
+                      <button
+                        type="button"
+                        className="remove-local-plugin"
+                        aria-label={`Remover ${manifest?.name ?? plugin.directoryName}`}
+                        onClick={() =>
+                          onRemovePlugin(
+                            plugin.directoryName,
+                            manifest?.name ?? plugin.directoryName,
+                          )
+                        }
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="empty-local-plugins">
+                  Nenhum plugin local instalado. Use “Abrir pasta” para
+                  adicionar um.
+                </p>
+              )}
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PreferenceToggle({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description?: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="preference-toggle">
+      <span>
+        <strong>{label}</strong>
+        {description ? <small>{description}</small> : null}
+      </span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.currentTarget.checked)}
+      />
+    </label>
   );
 }
 

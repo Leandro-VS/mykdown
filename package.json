@@ -1,7 +1,7 @@
 {
   "name": "mykdown",
   "private": true,
-  "version": "1.0.0-alpha.3",
+  "version": "1.0.0-rc.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,6 +13,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "install:local": "zsh scripts/install-local.sh",
+    "release:check": "zsh scripts/release-check.sh",
     "tauri": "tauri"
   },
   "dependencies": {

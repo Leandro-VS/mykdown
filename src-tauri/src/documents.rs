@@ -20,6 +20,13 @@ pub struct MutationResult {
     path: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetResult {
+    mime_type: String,
+    bytes: Vec<u8>,
+}
+
 #[tauri::command]
 pub fn save_document_atomic(
     app: AppHandle,
@@ -128,6 +135,62 @@ pub fn delete_entry(app: AppHandle, path: String) -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+pub fn read_document_asset(
+    app: AppHandle,
+    document_path: String,
+    source: String,
+) -> Result<AssetResult, String> {
+    let document_path = PathBuf::from(document_path);
+    if !app.fs_scope().is_allowed(&document_path) {
+        return Err("O documento não está no escopo autorizado.".into());
+    }
+    validate_markdown_path(&document_path)?;
+
+    let relative = Path::new(source.split(['?', '#']).next().unwrap_or_default());
+    if relative.as_os_str().is_empty() || relative.is_absolute() {
+        return Err("A imagem precisa usar um caminho relativo ao documento.".into());
+    }
+
+    let parent = document_path
+        .parent()
+        .ok_or_else(|| "Não foi possível localizar a pasta do documento.".to_string())?
+        .canonicalize()
+        .map_err(format_io_error)?;
+    let candidate = parent.join(relative);
+    let metadata = fs::symlink_metadata(&candidate).map_err(format_io_error)?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err("A imagem local não é um arquivo regular.".into());
+    }
+    if metadata.len() > 20 * 1024 * 1024 {
+        return Err("A imagem local excede o limite de 20 MB.".into());
+    }
+
+    let canonical = candidate.canonicalize().map_err(format_io_error)?;
+    if !canonical.starts_with(&parent) {
+        return Err("A imagem precisa estar dentro da pasta do documento.".into());
+    }
+    let mime_type = image_mime_type(&canonical)?;
+    let bytes = fs::read(canonical).map_err(format_io_error)?;
+    Ok(AssetResult { mime_type, bytes })
+}
+
+#[tauri::command]
+pub fn write_html_export(app: AppHandle, path: String, content: String) -> Result<(), String> {
+    let path = PathBuf::from(path);
+    if !app.fs_scope().is_allowed(&path) {
+        return Err("O destino da exportação não foi autorizado.".into());
+    }
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default();
+    if !extension.eq_ignore_ascii_case("html") && !extension.eq_ignore_ascii_case("htm") {
+        return Err("A exportação precisa usar a extensão .html.".into());
+    }
+    fs::write(path, content).map_err(format_io_error)
+}
+
 fn atomic_write(
     path: &Path,
     content: &[u8],
@@ -198,6 +261,25 @@ fn validate_markdown_path(path: &Path) -> Result<(), String> {
         Some("md" | "markdown") => Ok(()),
         _ => Err("O Mykdown salva somente arquivos .md e .markdown.".into()),
     }
+}
+
+fn image_mime_type(path: &Path) -> Result<String, String> {
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or_default();
+    let mime = if extension.eq_ignore_ascii_case("png") {
+        "image/png"
+    } else if extension.eq_ignore_ascii_case("jpg") || extension.eq_ignore_ascii_case("jpeg") {
+        "image/jpeg"
+    } else if extension.eq_ignore_ascii_case("gif") {
+        "image/gif"
+    } else if extension.eq_ignore_ascii_case("webp") {
+        "image/webp"
+    } else {
+        return Err("Formato de imagem local não suportado.".into());
+    };
+    Ok(mime.to_string())
 }
 
 fn validate_directory(app: &AppHandle, path: &Path) -> Result<(), String> {
@@ -327,5 +409,15 @@ mod tests {
         assert!(validate_entry_name("../notes").is_err());
         assert!(validate_entry_name("folder/notes").is_err());
         assert!(validate_entry_name(".hidden").is_err());
+    }
+
+    #[test]
+    fn accepts_only_safe_raster_image_types() {
+        assert_eq!(
+            image_mime_type(Path::new("image.PNG")).unwrap(),
+            "image/png"
+        );
+        assert!(image_mime_type(Path::new("image.svg")).is_err());
+        assert!(image_mime_type(Path::new("script.html")).is_err());
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "mykdown"
-version = "1.0.0-alpha.3"
+version = "1.0.0-rc.1"
 description = "A personal Markdown editor for macOS"
 authors = ["Leandro"]
 edition = "2021"

@@ -18,10 +18,51 @@ export type SessionSnapshot = {
   previewMargin: number;
 };
 
+export type AppPreferences = {
+  theme: "system" | "dark" | "light";
+  editorFontSize: number;
+  editorLineHeight: number;
+  wordWrap: boolean;
+  syncScroll: boolean;
+  autoSave: boolean;
+  officialPlugins: {
+    mermaid: boolean;
+    flowchart: boolean;
+  };
+  localPluginEnabled: Record<string, boolean>;
+  safeMode: boolean;
+};
+
+export const DEFAULT_PREFERENCES: AppPreferences = {
+  theme: "system",
+  editorFontSize: 13,
+  editorLineHeight: 1.75,
+  wordWrap: true,
+  syncScroll: true,
+  autoSave: false,
+  officialPlugins: { mermaid: true, flowchart: true },
+  localPluginEnabled: {},
+  safeMode: false,
+};
+
 export type PersistedState = {
   recents: RecentItem[];
   session: SessionSnapshot | null;
+  preferences: AppPreferences;
 };
+
+export function mergePreferences(
+  preferences?: Partial<AppPreferences> | null,
+): AppPreferences {
+  return {
+    ...DEFAULT_PREFERENCES,
+    ...preferences,
+    officialPlugins: {
+      ...DEFAULT_PREFERENCES.officialPlugins,
+      ...preferences?.officialPlugins,
+    },
+  };
+}
 
 export function mergeRecent(
   current: RecentItem[],
@@ -39,7 +80,11 @@ let storePromise: Promise<Store> | null = null;
 function getStore(): Promise<Store> {
   storePromise ??= load(STORE_PATH, {
     autoSave: 200,
-    defaults: { recents: [], session: null },
+    defaults: {
+      recents: [],
+      session: null,
+      preferences: DEFAULT_PREFERENCES,
+    },
   });
   return storePromise;
 }
@@ -49,6 +94,9 @@ export async function readPersistedState(): Promise<PersistedState> {
   return {
     recents: (await store.get<RecentItem[]>("recents")) ?? [],
     session: (await store.get<SessionSnapshot | null>("session")) ?? null,
+    preferences: mergePreferences(
+      await store.get<Partial<AppPreferences>>("preferences"),
+    ),
   };
 }
 
@@ -73,4 +121,11 @@ export async function removeRecent(path: string): Promise<RecentItem[]> {
 export async function persistSession(session: SessionSnapshot): Promise<void> {
   const store = await getStore();
   await store.set("session", session);
+}
+
+export async function persistPreferences(
+  preferences: AppPreferences,
+): Promise<void> {
+  const store = await getStore();
+  await store.set("preferences", preferences);
 }

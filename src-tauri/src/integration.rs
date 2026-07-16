@@ -24,6 +24,17 @@ pub fn setup_native_menu(app: &mut App) -> Result<(), Box<dyn std::error::Error>
     let save = MenuItemBuilder::with_id("save", "Salvar")
         .accelerator("CmdOrCtrl+S")
         .build(app)?;
+    let quick_open = MenuItemBuilder::with_id("quick-open", "Abrir rapidamente…")
+        .accelerator("CmdOrCtrl+P")
+        .build(app)?;
+    let export_html = MenuItemBuilder::with_id("export-html", "Exportar como HTML…")
+        .accelerator("CmdOrCtrl+Shift+E")
+        .build(app)?;
+    let export_pdf =
+        MenuItemBuilder::with_id("export-pdf", "Imprimir ou salvar como PDF…").build(app)?;
+    let preferences = MenuItemBuilder::with_id("preferences", "Preferências…")
+        .accelerator("CmdOrCtrl+,")
+        .build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Encerrar Mykdown")
         .accelerator("CmdOrCtrl+Q")
         .build(app)?;
@@ -37,6 +48,8 @@ pub fn setup_native_menu(app: &mut App) -> Result<(), Box<dyn std::error::Error>
         .hide_others()
         .show_all()
         .separator()
+        .item(&preferences)
+        .separator()
         .item(&quit)
         .build()?;
     let file_menu = SubmenuBuilder::new(app, "Arquivo")
@@ -44,8 +57,12 @@ pub fn setup_native_menu(app: &mut App) -> Result<(), Box<dyn std::error::Error>
         .separator()
         .item(&open_file)
         .item(&open_folder)
+        .item(&quick_open)
         .separator()
         .item(&save)
+        .separator()
+        .item(&export_html)
+        .item(&export_pdf)
         .separator()
         .close_window()
         .build()?;
@@ -76,7 +93,15 @@ pub fn setup_native_menu(app: &mut App) -> Result<(), Box<dyn std::error::Error>
 pub fn handle_menu_event(app: &AppHandle, id: &str) {
     if matches!(
         id,
-        "new-file" | "open-file" | "open-folder" | "save" | "quit"
+        "new-file"
+            | "open-file"
+            | "open-folder"
+            | "quick-open"
+            | "save"
+            | "export-html"
+            | "export-pdf"
+            | "preferences"
+            | "quit"
     ) {
         let _ = app.emit("mykdown://menu", id);
     }

@@ -1,0 +1,9 @@
+{
+  "id": "callout-example",
+  "name": "Callout Example",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "language": "callout",
+  "entry": "plugin.js",
+  "capabilities": ["preview.codeBlock"]
+}

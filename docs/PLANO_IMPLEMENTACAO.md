@@ -1,5 +1,10 @@
 # Plano de implementação do Mykdown
 
+> **Estado atual:** todas as entregas funcionais previstas foram implementadas
+> no release candidate `1.0.0-rc.1`. A única condição que não pode ser
+> automatizada é a semana de uso diário da Etapa 9; ela deve ser executada com
+> o checklist em `docs/SMOKE_TEST.md` antes da tag final `v1.0.0`.
+
 ## 1. Objetivo prático
 
 Construir um editor Markdown confiável para uso diário em um único Mac Apple Silicon. O aplicativo deve ser rápido, funcionar sem internet, abrir arquivos reais do filesystem e ser simples de compilar, instalar e atualizar localmente.
@@ -254,7 +259,10 @@ Entregas:
 - isolamento de execução e ponte de mensagens validada;
 - limites de tempo e tratamento de falha por plugin;
 - modo de segurança para iniciar o Mykdown com plugins externos desativados;
-- documentação e plugins de exemplo para preview, CodeMirror, comando e tema.
+- documentação e plugin de exemplo para blocos de código no preview.
+
+Extensões de CodeMirror, comandos e temas continuam fora da API 1 até existir
+um caso real que justifique ampliar o contrato e a superfície de segurança.
 
 Não haverá marketplace, instalação automática pela internet ou execução de pacotes npm arbitrários na versão 1.0.
 
@@ -267,7 +275,7 @@ Entregas:
 - Ícone `.icns` e metadados finais do bundle.
 - Versão única em `tauri.conf.json`.
 - Build release com `npm run tauri build -- --bundles app`.
-- Script de instalação que encerra uma instância aberta, preserva preferências, copia com segurança o novo `Mykdown.app` e abre novamente somente quando solicitado.
+- Script de instalação que recusa a atualização enquanto houver uma instância aberta, preserva preferências, substitui o `Mykdown.app` com backup transitório e abre a nova versão ao concluir.
 - Checklist de smoke test no app instalado, não apenas em modo dev.
 
 Critério de pronto: `npm run install:local` produz a mesma instalação em `/Applications/Mykdown.app` a partir de um checkout limpo.

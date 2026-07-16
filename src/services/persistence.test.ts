@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { mergeRecent, type RecentItem } from "./persistence";
+import {
+  DEFAULT_PREFERENCES,
+  mergePreferences,
+  mergeRecent,
+  type RecentItem,
+} from "./persistence";
 
 describe("mergeRecent", () => {
   it("moves an existing path to the front without duplicating it", () => {
@@ -37,5 +42,23 @@ describe("mergeRecent", () => {
     expect(next).toHaveLength(10);
     expect(next[0]?.path).toBe("/new");
     expect(next.some((item) => item.path === "/notes/9.md")).toBe(false);
+  });
+});
+
+describe("mergePreferences", () => {
+  it("migrates partial preferences without disabling new defaults", () => {
+    expect(
+      mergePreferences({
+        theme: "light",
+        officialPlugins: { mermaid: false } as {
+          mermaid: boolean;
+          flowchart: boolean;
+        },
+      }),
+    ).toEqual({
+      ...DEFAULT_PREFERENCES,
+      theme: "light",
+      officialPlugins: { mermaid: false, flowchart: true },
+    });
   });
 });

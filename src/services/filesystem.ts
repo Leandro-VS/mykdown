@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { basename, join } from "@tauri-apps/api/path";
+import { basename, dirname, join } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readDir, readTextFile, stat, watch } from "@tauri-apps/plugin-fs";
 import type { MarkdownDocument, MarkdownTreeNode } from "../types/files";
@@ -124,6 +124,25 @@ export async function renameMarkdownEntry(
 export async function deleteMarkdownEntry(path: string): Promise<void> {
   requireTauri();
   await invoke("delete_entry", { path });
+}
+
+export async function readDocumentAsset(
+  documentPath: string,
+  source: string,
+): Promise<{ mimeType: string; bytes: number[] }> {
+  requireTauri();
+  return invoke("read_document_asset", { documentPath, source });
+}
+
+export async function resolveMarkdownLink(
+  documentPath: string,
+  href: string,
+): Promise<string> {
+  const cleanHref = decodeURIComponent(href.split(/[?#]/, 1)[0] ?? "");
+  if (!isMarkdownFile(cleanHref)) {
+    throw new Error("O link não aponta para um documento Markdown.");
+  }
+  return join(await dirname(documentPath), cleanHref);
 }
 
 export async function getFileModifiedAt(path: string): Promise<number | null> {

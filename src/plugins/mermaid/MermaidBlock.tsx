@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import { Check, Copy } from "lucide-react";
 import DOMPurify from "dompurify";
 import type { CodeBlockRendererProps } from "../registry";
 
@@ -6,6 +7,31 @@ export function MermaidBlock({ code }: CodeBlockRendererProps) {
   const reactId = useId();
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [theme, setTheme] = useState<"dark" | "default">("dark");
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const updateTheme = () => {
+      const preference = document.documentElement.dataset.theme ?? "system";
+      setTheme(
+        preference === "dark" || (preference === "system" && media.matches)
+          ? "dark"
+          : "default",
+      );
+    };
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    media.addEventListener("change", updateTheme);
+    updateTheme();
+    return () => {
+      observer.disconnect();
+      media.removeEventListener("change", updateTheme);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -17,7 +43,7 @@ export function MermaidBlock({ code }: CodeBlockRendererProps) {
         mermaid.initialize({
           startOnLoad: false,
           securityLevel: "strict",
-          theme: "dark",
+          theme,
           flowchart: { htmlLabels: false },
         });
 
@@ -44,7 +70,7 @@ export function MermaidBlock({ code }: CodeBlockRendererProps) {
     return () => {
       cancelled = true;
     };
-  }, [code, reactId]);
+  }, [code, reactId, theme]);
 
   if (error) {
     return (
@@ -60,10 +86,21 @@ export function MermaidBlock({ code }: CodeBlockRendererProps) {
   }
 
   return (
-    <div
-      className="mermaid-diagram"
-      aria-label="Diagrama Mermaid"
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
+    <div className="mermaid-diagram" aria-label="Diagrama Mermaid">
+      <button
+        type="button"
+        className="copy-diagram-source"
+        onClick={() => {
+          void navigator.clipboard.writeText(code).then(() => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1_200);
+          });
+        }}
+      >
+        {copied ? <Check size={13} /> : <Copy size={13} />}
+        {copied ? "Copiado" : "Copiar fonte"}
+      </button>
+      <div dangerouslySetInnerHTML={{ __html: svg }} />
+    </div>
   );
 }

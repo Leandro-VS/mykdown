@@ -1,5 +1,6 @@
 mod documents;
 mod integration;
+mod plugins;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -24,7 +25,12 @@ pub fn run() {
             documents::create_directory,
             documents::rename_entry,
             documents::delete_entry,
+            documents::read_document_asset,
+            documents::write_html_export,
             integration::take_pending_open_paths,
+            plugins::list_local_plugins,
+            plugins::local_plugins_directory,
+            plugins::remove_local_plugin,
         ])
         .build(tauri::generate_context!())
         .expect("error while running Mykdown");
