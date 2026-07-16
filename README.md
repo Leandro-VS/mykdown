@@ -25,6 +25,60 @@ locais isolados.
 - Zustand para estado de interface
 - Arquitetura de plugins para diagramas, temas e extensões locais isoladas
 
+## Arquitetura
+
+```mermaid
+flowchart LR
+  subgraph APP["Mykdown.app · Tauri 2"]
+    direction TB
+
+    subgraph FRONTEND["WebView · React + TypeScript"]
+      direction TB
+      SHELL["App Shell<br/>Home · Workspace · Preferências"]
+      STATE["Zustand<br/>documento · draft · árvore · view mode"]
+      EDITOR["CodeMirror 6<br/>Editor Markdown"]
+      PREVIEW["react-markdown<br/>remark-gfm · rehype-sanitize"]
+      SERVICES["Serviços TypeScript<br/>filesystem · persistência · exportação · clima"]
+      REGISTRY["Plugin Registry<br/>code blocks · temas"]
+      OFFICIAL["Plugins oficiais<br/>Mermaid · Flowchart · Theme Pack"]
+      LOCAL["Plugins locais<br/>Web Worker isolado · timeout · HTML sanitizado"]
+
+      SHELL <--> STATE
+      STATE <--> EDITOR
+      STATE --> PREVIEW
+      SHELL --> SERVICES
+      PREVIEW --> REGISTRY
+      REGISTRY --> OFFICIAL
+      REGISTRY --> LOCAL
+    end
+
+    BRIDGE["Ponte Tauri<br/>IPC · events · plugins oficiais"]
+    RUST["Backend Rust<br/>documentos · integração · plugins locais"]
+
+    SERVICES <--> BRIDGE
+    BRIDGE <--> RUST
+  end
+
+  FILES[("Filesystem do macOS<br/>.md · .markdown · imagens")]
+  STORE[("mykdown-state.json<br/>sessão · recentes · preferências")]
+  FINDER["Finder e menus nativos"]
+  PRINT["Impressão / PDF"]
+  WEATHER["Open-Meteo<br/>clima de São Paulo"]
+
+  BRIDGE <--> FILES
+  RUST <--> FILES
+  BRIDGE <--> STORE
+  FINDER <--> RUST
+  PREVIEW --> PRINT
+  SERVICES --> WEATHER
+```
+
+O filesystem do macOS é a fonte da verdade. A interface mantém somente o estado
+de trabalho em memória; leitura, observação e diálogos passam pelos plugins do
+Tauri, enquanto mutações sensíveis e gravações atômicas são validadas no backend
+Rust. O registro de plugins conecta extensões oficiais e locais ao preview sem
+acoplar o editor a cada implementação.
+
 ## Desenvolvimento
 
 ```bash
