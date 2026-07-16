@@ -2067,7 +2067,7 @@ dependencies = [
 
 [[package]]
 name = "mykdown"
-version = "1.0.0-alpha.2"
+version = "1.0.0-alpha.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -2077,6 +2077,7 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-opener",
  "tauri-plugin-persisted-scope",
+ "tauri-plugin-single-instance",
  "tauri-plugin-store",
  "tauri-plugin-window-state",
 ]
@@ -3616,6 +3617,22 @@ dependencies = [
  "tauri",
  "tauri-plugin-fs",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "tauri-plugin-single-instance"
+version = "2.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3214becf9ef5783c0ae99a3bb25adf5353a7a16ebf53e74b909e29205735c6c"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "windows-sys 0.60.2",
+ "zbus",
 ]
 
 [[package]]

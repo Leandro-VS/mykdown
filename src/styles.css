@@ -211,11 +211,22 @@ a:focus-visible {
   padding: 0 9px 15px;
 }
 
-.sidebar-heading > div {
+.sidebar-title {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.sidebar-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sidebar-heading-actions .icon-button {
+  width: 25px;
+  height: 25px;
 }
 
 .sidebar-heading strong {
@@ -247,6 +258,89 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.tree-row-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.tree-row-wrap > .tree-row {
+  padding-right: 31px;
+}
+
+.tree-actions {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  z-index: 5;
+}
+
+.tree-actions summary {
+  width: 23px;
+  height: 23px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  color: var(--text-faint);
+  opacity: 0;
+  cursor: default;
+  list-style: none;
+}
+
+.tree-actions summary::-webkit-details-marker {
+  display: none;
+}
+
+.tree-row-wrap:hover .tree-actions summary,
+.tree-actions[open] summary,
+.tree-actions summary:focus-visible {
+  opacity: 1;
+}
+
+.tree-actions summary:hover,
+.tree-actions[open] summary {
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.tree-action-menu {
+  position: absolute;
+  top: 25px;
+  right: 0;
+  z-index: 20;
+  width: 156px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+}
+
+.tree-action-menu button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--text-secondary);
+  background: transparent;
+  font-size: 11px;
+  text-align: left;
+}
+
+.tree-action-menu button:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.tree-action-menu .danger-menu-item {
+  color: var(--danger);
 }
 
 .tree-row {
@@ -343,6 +437,14 @@ a:focus-visible {
 
 .mode-preview .preview-pane {
   border-left: 0;
+  padding-inline: min(var(--preview-margin, 64px), 20vw);
+}
+
+.mode-preview .markdown-preview {
+  width: 100%;
+  max-width: none;
+  padding-right: 0;
+  padding-left: 0;
 }
 
 .editor-host,
@@ -744,6 +846,28 @@ kbd {
   flex: 1;
 }
 
+.preview-margin-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.preview-margin-control input {
+  width: 112px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.preview-margin-control output {
+  width: 34px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-align: right;
+}
+
 .error-toast {
   position: absolute;
   right: 18px;
@@ -823,6 +947,11 @@ kbd {
   background: var(--accent-soft);
 }
 
+.dialog-icon.is-danger {
+  color: var(--danger);
+  background: rgba(225, 132, 132, 0.1);
+}
+
 .confirmation-dialog h2 {
   margin: 0 0 6px;
   font-size: 16px;
@@ -833,6 +962,41 @@ kbd {
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.55;
+}
+
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.dialog-field > span {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.dialog-field input {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  outline: none;
+  color: var(--text-primary);
+  background: var(--bg-sidebar);
+  font-size: 12px;
+}
+
+.dialog-field input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.dialog-field small {
+  color: var(--text-faint);
+  font-size: 9px;
 }
 
 .dialog-actions {

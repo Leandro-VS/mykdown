@@ -39,3 +39,17 @@ O bundle macOS é gerado com:
 ```bash
 npm run tauri build -- --bundles app
 ```
+
+## Instalação no Mac
+
+Feche uma versão aberta do Mykdown e execute:
+
+```bash
+npm run install:local
+```
+
+O script valida o build, substitui `/Applications/Mykdown.app` e abre a nova
+versão. Depois da instalação, o Mykdown aparece no menu **Abrir com** de
+arquivos `.md` e `.markdown` no Finder. Para torná-lo o editor padrão, use
+**Obter Informações → Abrir com → Mykdown → Alterar Tudo** em um arquivo
+Markdown.

@@ -83,6 +83,49 @@ export async function saveMarkdownDocument(
   return result.modifiedAt;
 }
 
+type MutationResult = { path: string };
+
+export async function createMarkdownDocument(
+  parent: string,
+  name: string,
+): Promise<string> {
+  requireTauri();
+  const result = await invoke<MutationResult>("create_markdown_document", {
+    parent,
+    name,
+  });
+  return result.path;
+}
+
+export async function createMarkdownDirectory(
+  parent: string,
+  name: string,
+): Promise<string> {
+  requireTauri();
+  const result = await invoke<MutationResult>("create_directory", {
+    parent,
+    name,
+  });
+  return result.path;
+}
+
+export async function renameMarkdownEntry(
+  path: string,
+  newName: string,
+): Promise<string> {
+  requireTauri();
+  const result = await invoke<MutationResult>("rename_entry", {
+    path,
+    newName,
+  });
+  return result.path;
+}
+
+export async function deleteMarkdownEntry(path: string): Promise<void> {
+  requireTauri();
+  await invoke("delete_entry", { path });
+}
+
 export async function getFileModifiedAt(path: string): Promise<number | null> {
   requireTauri();
   const metadata = await stat(path);
@@ -122,8 +165,9 @@ export async function scanMarkdownFolder(
 
 async function scanDirectory(
   directoryPath: string,
+  knownEntries?: Awaited<ReturnType<typeof readDir>>,
 ): Promise<MarkdownTreeNode[]> {
-  const entries = await readDir(directoryPath);
+  const entries = knownEntries ?? (await readDir(directoryPath));
   const nodes = await Promise.all(
     entries.map(async (entry): Promise<MarkdownTreeNode | null> => {
       const entryPath = await join(directoryPath, entry.name);
@@ -137,8 +181,9 @@ async function scanDirectory(
           return null;
         }
 
-        const children = await scanDirectory(entryPath);
-        return children.length > 0
+        const directoryEntries = await readDir(entryPath);
+        const children = await scanDirectory(entryPath, directoryEntries);
+        return children.length > 0 || directoryEntries.length === 0
           ? {
               kind: "directory",
               name: entry.name,

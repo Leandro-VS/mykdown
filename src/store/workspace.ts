@@ -19,6 +19,7 @@ type WorkspaceState = {
   setRoot: (rootDir: string | null, tree: MarkdownTreeNode[]) => void;
   updateTree: (tree: MarkdownTreeNode[]) => void;
   loadDocument: (document: MarkdownDocument) => void;
+  closeDocument: () => void;
   updateDraft: (content: string) => void;
   markSaved: (modifiedAt: number | null) => void;
   setDiskModifiedAt: (modifiedAt: number | null) => void;
@@ -57,6 +58,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       savedContent: document.content,
       draftContent: document.content,
       diskModifiedAt: document.modifiedAt,
+      error: null,
+    }),
+  closeDocument: () =>
+    set({
+      activePath: null,
+      activeName: null,
+      savedContent: "",
+      draftContent: "",
+      diskModifiedAt: null,
       error: null,
     }),
   updateDraft: (draftContent) => set({ draftContent }),

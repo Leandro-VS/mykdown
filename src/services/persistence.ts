@@ -15,6 +15,7 @@ export type SessionSnapshot = {
   rootDir: string | null;
   activePath: string | null;
   viewMode: ViewMode;
+  previewMargin: number;
 };
 
 export type PersistedState = {

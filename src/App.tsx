@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import {
   BookOpen,
   Check,
@@ -8,9 +15,11 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  FolderPlus,
   LoaderCircle,
   PanelLeft,
   Save,
+  SlidersHorizontal,
   TriangleAlert,
   X,
 } from "lucide-react";
@@ -22,13 +31,23 @@ import { MarkdownPreview } from "./components/MarkdownPreview";
 import {
   chooseMarkdownFile,
   chooseMarkdownFolder,
+  createMarkdownDirectory,
+  createMarkdownDocument,
+  deleteMarkdownEntry,
   getFileModifiedAt,
   isRunningInTauri,
   readMarkdownDocument,
+  renameMarkdownEntry,
   saveMarkdownDocument,
   scanMarkdownFolder,
   watchMarkdownPath,
 } from "./services/filesystem";
+import {
+  listenForNativeMenu,
+  listenForOpenFileRequests,
+  takePendingOpenPaths,
+  type NativeMenuAction,
+} from "./services/integration";
 import {
   persistSession,
   readPersistedState,
@@ -43,6 +62,18 @@ type DeferredAction = () => Promise<void>;
 
 type ExternalChange =
   { kind: "modified"; modifiedAt: number } | { kind: "removed" };
+
+type WorkspaceDialogState =
+  | { kind: "create-file"; parentPath: string }
+  | { kind: "create-folder"; parentPath: string }
+  | { kind: "rename"; node: MarkdownTreeNode }
+  | { kind: "delete"; node: MarkdownTreeNode };
+
+const DEFAULT_PREVIEW_MARGIN = 64;
+
+function isPathInside(path: string, parent: string): boolean {
+  return path === parent || path.startsWith(`${parent}/`);
+}
 
 function countFiles(nodes: MarkdownTreeNode[]): number {
   return nodes.reduce(
@@ -70,6 +101,7 @@ export default function App() {
   const setRoot = useWorkspaceStore((state) => state.setRoot);
   const updateTree = useWorkspaceStore((state) => state.updateTree);
   const loadDocument = useWorkspaceStore((state) => state.loadDocument);
+  const closeDocument = useWorkspaceStore((state) => state.closeDocument);
   const updateDraft = useWorkspaceStore((state) => state.updateDraft);
   const markSaved = useWorkspaceStore((state) => state.markSaved);
   const setDiskModifiedAt = useWorkspaceStore(
@@ -87,7 +119,14 @@ export default function App() {
     null,
   );
   const [persistenceReady, setPersistenceReady] = useState(false);
+  const [previewMargin, setPreviewMargin] = useState(DEFAULT_PREVIEW_MARGIN);
+  const [workspaceDialog, setWorkspaceDialog] =
+    useState<WorkspaceDialogState | null>(null);
   const ignoreWatchUntil = useRef(0);
+  const nativeMenuActionRef = useRef<(action: NativeMenuAction) => void>(
+    () => undefined,
+  );
+  const drainOpenRequestsRef = useRef<() => void>(() => undefined);
 
   const handleSave = useCallback(async (): Promise<boolean> => {
     if (!activePath || !isDirty) {
@@ -137,29 +176,45 @@ export default function App() {
     [isDirty],
   );
 
+  const openStandaloneDocument = useCallback(
+    async (path: string) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const document = await readMarkdownDocument(path);
+        setRoot(null, []);
+        loadDocument(document);
+        setExternalChange(null);
+        setRecents(
+          await recordRecent({ kind: "file", path, name: document.name }),
+        );
+      } catch (cause) {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Não foi possível abrir o arquivo.",
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [loadDocument, setBusy, setError, setRoot],
+  );
+
   const performOpenFile = useCallback(async () => {
     setError(null);
     try {
       const path = await chooseMarkdownFile();
       if (!path) return;
-
-      setBusy(true);
-      const document = await readMarkdownDocument(path);
-      setRoot(null, []);
-      loadDocument(document);
-      setRecents(
-        await recordRecent({ kind: "file", path, name: document.name }),
-      );
+      await openStandaloneDocument(path);
     } catch (cause) {
       setError(
         cause instanceof Error
           ? cause.message
           : "Não foi possível abrir o arquivo.",
       );
-    } finally {
-      setBusy(false);
     }
-  }, [loadDocument, setBusy, setError, setRoot]);
+  }, [openStandaloneDocument, setError]);
 
   const handleOpenFile = useCallback(
     () => runOrDefer(performOpenFile),
@@ -174,6 +229,7 @@ export default function App() {
 
       setBusy(true);
       setRoot(path, await scanMarkdownFolder(path));
+      setExternalChange(null);
       setRecents(
         await recordRecent({
           kind: "folder",
@@ -207,6 +263,7 @@ export default function App() {
         try {
           const document = await readMarkdownDocument(path);
           loadDocument(document);
+          setExternalChange(null);
           setRecents(
             await recordRecent({ kind: "file", path, name: document.name }),
           );
@@ -232,10 +289,12 @@ export default function App() {
         try {
           if (recent.kind === "folder") {
             setRoot(recent.path, await scanMarkdownFolder(recent.path));
+            setExternalChange(null);
           } else {
             const document = await readMarkdownDocument(recent.path);
             setRoot(null, []);
             loadDocument(document);
+            setExternalChange(null);
           }
           setRecents(
             await recordRecent({
@@ -259,6 +318,163 @@ export default function App() {
     [loadDocument, runOrDefer, setBusy, setError, setRoot],
   );
 
+  const refreshWorkspaceTree = useCallback(async () => {
+    if (!rootDir) return;
+    updateTree(await scanMarkdownFolder(rootDir));
+  }, [rootDir, updateTree]);
+
+  const handleCreateFile = useCallback(
+    async (parentPath: string, name: string) => {
+      await runOrDefer(async () => {
+        setBusy(true);
+        setError(null);
+        try {
+          const path = await createMarkdownDocument(parentPath, name);
+          await refreshWorkspaceTree();
+          const document = await readMarkdownDocument(path);
+          loadDocument(document);
+          setExternalChange(null);
+          setRecents(
+            await recordRecent({ kind: "file", path, name: document.name }),
+          );
+        } catch (cause) {
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "Não foi possível criar o arquivo.",
+          );
+        } finally {
+          setBusy(false);
+        }
+      });
+    },
+    [loadDocument, refreshWorkspaceTree, runOrDefer, setBusy, setError],
+  );
+
+  const handleCreateFolder = useCallback(
+    async (parentPath: string, name: string) => {
+      setBusy(true);
+      setError(null);
+      try {
+        await createMarkdownDirectory(parentPath, name);
+        await refreshWorkspaceTree();
+      } catch (cause) {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Não foi possível criar a pasta.",
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [refreshWorkspaceTree, setBusy, setError],
+  );
+
+  const handleRenameEntry = useCallback(
+    async (node: MarkdownTreeNode, newName: string) => {
+      const affectsActive =
+        activePath !== null && isPathInside(activePath, node.path);
+      const action = async () => {
+        setBusy(true);
+        setError(null);
+        try {
+          const newPath = await renameMarkdownEntry(node.path, newName);
+          await refreshWorkspaceTree();
+          if (affectsActive && activePath) {
+            const nextActivePath = `${newPath}${activePath.slice(node.path.length)}`;
+            loadDocument(await readMarkdownDocument(nextActivePath));
+            setExternalChange(null);
+            setRecents(await removeRecent(node.path));
+          }
+        } catch (cause) {
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "Não foi possível renomear o item.",
+          );
+        } finally {
+          setBusy(false);
+        }
+      };
+
+      if (affectsActive) await runOrDefer(action);
+      else await action();
+    },
+    [
+      activePath,
+      loadDocument,
+      refreshWorkspaceTree,
+      runOrDefer,
+      setBusy,
+      setError,
+    ],
+  );
+
+  const handleDeleteEntry = useCallback(
+    async (node: MarkdownTreeNode) => {
+      const affectsActive =
+        activePath !== null && isPathInside(activePath, node.path);
+      const action = async () => {
+        setBusy(true);
+        setError(null);
+        try {
+          await deleteMarkdownEntry(node.path);
+          await refreshWorkspaceTree();
+          if (affectsActive) {
+            closeDocument();
+            setExternalChange(null);
+          }
+          setRecents(await removeRecent(node.path));
+        } catch (cause) {
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "Não foi possível excluir o item.",
+          );
+        } finally {
+          setBusy(false);
+        }
+      };
+
+      if (affectsActive) await runOrDefer(action);
+      else await action();
+    },
+    [
+      activePath,
+      closeDocument,
+      refreshWorkspaceTree,
+      runOrDefer,
+      setBusy,
+      setError,
+    ],
+  );
+
+  const submitWorkspaceDialog = useCallback(
+    async (value?: string) => {
+      const dialog = workspaceDialog;
+      if (!dialog) return;
+      setWorkspaceDialog(null);
+
+      if (dialog.kind === "create-file" && value) {
+        await handleCreateFile(dialog.parentPath, value);
+      } else if (dialog.kind === "create-folder" && value) {
+        await handleCreateFolder(dialog.parentPath, value);
+      } else if (dialog.kind === "rename" && value) {
+        await handleRenameEntry(dialog.node, value);
+      } else if (dialog.kind === "delete") {
+        await handleDeleteEntry(dialog.node);
+      }
+    },
+    [
+      handleCreateFile,
+      handleCreateFolder,
+      handleDeleteEntry,
+      handleRenameEntry,
+      workspaceDialog,
+    ],
+  );
+
   const saveAndContinue = useCallback(async () => {
     const action = pendingAction;
     if (!action || !(await handleSave())) return;
@@ -272,6 +488,82 @@ export default function App() {
     setPendingAction(null);
     if (action) await action();
   }, [pendingAction]);
+
+  const drainOpenRequests = useCallback(async () => {
+    try {
+      const paths = await takePendingOpenPaths();
+      const path = paths.at(-1);
+      if (path) {
+        await runOrDefer(() => openStandaloneDocument(path));
+      }
+    } catch {
+      setError("Não foi possível abrir o arquivo solicitado pelo macOS.");
+    }
+  }, [openStandaloneDocument, runOrDefer, setError]);
+
+  const handleNativeMenuAction = useCallback(
+    (action: NativeMenuAction) => {
+      if (action === "open-file") {
+        void handleOpenFile();
+      } else if (action === "open-folder") {
+        void handleOpenFolder();
+      } else if (action === "save") {
+        void handleSave();
+      } else if (action === "quit") {
+        void runOrDefer(async () => {
+          await getCurrentWindow().destroy();
+        });
+      } else if (rootDir) {
+        setWorkspaceDialog({ kind: "create-file", parentPath: rootDir });
+      } else {
+        setError("Abra uma pasta antes de criar um arquivo.");
+      }
+    },
+    [
+      handleOpenFile,
+      handleOpenFolder,
+      handleSave,
+      rootDir,
+      runOrDefer,
+      setError,
+    ],
+  );
+
+  nativeMenuActionRef.current = handleNativeMenuAction;
+  drainOpenRequestsRef.current = () => void drainOpenRequests();
+
+  useEffect(() => {
+    if (!isRunningInTauri()) return;
+    let disposed = false;
+    let unlistenOpen: (() => void) | undefined;
+    let unlistenMenu: (() => void) | undefined;
+
+    void Promise.all([
+      listenForOpenFileRequests(() => drainOpenRequestsRef.current()),
+      listenForNativeMenu((action) => nativeMenuActionRef.current(action)),
+    ])
+      .then(([stopOpen, stopMenu]) => {
+        if (disposed) {
+          stopOpen();
+          stopMenu();
+        } else {
+          unlistenOpen = stopOpen;
+          unlistenMenu = stopMenu;
+          drainOpenRequestsRef.current();
+        }
+      })
+      .catch(() => {
+        if (!disposed) {
+          setError("A integração com o menu do macOS não pôde ser iniciada.");
+        }
+      });
+
+    return () => {
+      disposed = true;
+      unlistenOpen?.();
+      unlistenMenu?.();
+    };
+  }, [setError]);
 
   useEffect(() => {
     if (!isRunningInTauri()) {
@@ -288,6 +580,11 @@ export default function App() {
         if (!persisted.session) return;
 
         setViewMode(persisted.session.viewMode);
+        if (Number.isFinite(persisted.session.previewMargin)) {
+          setPreviewMargin(
+            Math.min(240, Math.max(16, persisted.session.previewMargin)),
+          );
+        }
         setBusy(true);
         if (persisted.session.rootDir) {
           setRoot(
@@ -321,8 +618,8 @@ export default function App() {
 
   useEffect(() => {
     if (!persistenceReady || !isRunningInTauri()) return;
-    void persistSession({ rootDir, activePath, viewMode });
-  }, [activePath, persistenceReady, rootDir, viewMode]);
+    void persistSession({ rootDir, activePath, viewMode, previewMargin });
+  }, [activePath, persistenceReady, previewMargin, rootDir, viewMode]);
 
   useEffect(() => {
     if (!isRunningInTauri() || !rootDir) return;
@@ -409,13 +706,13 @@ export default function App() {
       if (!event.metaKey) return;
 
       const key = event.key.toLocaleLowerCase();
-      if (key === "s") {
+      if (key === "s" && !isRunningInTauri()) {
         event.preventDefault();
         void handleSave();
-      } else if (key === "o" && event.shiftKey) {
+      } else if (key === "o" && event.shiftKey && !isRunningInTauri()) {
         event.preventDefault();
         void handleOpenFolder();
-      } else if (key === "o") {
+      } else if (key === "o" && !isRunningInTauri()) {
         event.preventDefault();
         void handleOpenFile();
       } else if (["1", "2", "3"].includes(key)) {
@@ -516,17 +813,53 @@ export default function App() {
         {showSidebar ? (
           <aside className="sidebar">
             <div className="sidebar-heading">
-              <div>
+              <div className="sidebar-title">
                 <span className="eyebrow">PASTA ABERTA</span>
                 <strong>{displayPathName(rootDir)}</strong>
               </div>
-              <span className="file-count">{countFiles(tree)}</span>
+              <div className="sidebar-heading-actions">
+                <IconButton
+                  label="Novo arquivo"
+                  onClick={() =>
+                    setWorkspaceDialog({
+                      kind: "create-file",
+                      parentPath: rootDir,
+                    })
+                  }
+                >
+                  <FilePlus2 size={15} />
+                </IconButton>
+                <IconButton
+                  label="Nova pasta"
+                  onClick={() =>
+                    setWorkspaceDialog({
+                      kind: "create-folder",
+                      parentPath: rootDir,
+                    })
+                  }
+                >
+                  <FolderPlus size={15} />
+                </IconButton>
+                <span className="file-count">{countFiles(tree)}</span>
+              </div>
             </div>
             {tree.length > 0 ? (
               <FileTree
                 nodes={tree}
                 activePath={activePath}
                 onSelect={(path) => void openDocumentAtPath(path)}
+                onCreateFile={(parentPath) =>
+                  setWorkspaceDialog({ kind: "create-file", parentPath })
+                }
+                onCreateFolder={(parentPath) =>
+                  setWorkspaceDialog({ kind: "create-folder", parentPath })
+                }
+                onRename={(node) =>
+                  setWorkspaceDialog({ kind: "rename", node })
+                }
+                onDelete={(node) =>
+                  setWorkspaceDialog({ kind: "delete", node })
+                }
               />
             ) : (
               <div className="sidebar-empty">
@@ -547,7 +880,14 @@ export default function App() {
           ) : !activePath ? (
             <FolderEmptyState onOpenFile={handleOpenFile} />
           ) : (
-            <div className={`content-panes mode-${viewMode}`}>
+            <div
+              className={`content-panes mode-${viewMode}`}
+              style={
+                {
+                  "--preview-margin": `${previewMargin}px`,
+                } as CSSProperties
+              }
+            >
               {viewMode !== "preview" ? (
                 <section className="editor-pane" aria-label="Editor Markdown">
                   <MarkdownEditor
@@ -572,6 +912,24 @@ export default function App() {
         <span className="status-spacer" />
         {activePath ? (
           <>
+            {viewMode === "preview" ? (
+              <label className="preview-margin-control">
+                <SlidersHorizontal size={12} />
+                <span>Margem</span>
+                <input
+                  type="range"
+                  min="16"
+                  max="240"
+                  step="8"
+                  value={previewMargin}
+                  aria-label="Margem lateral do preview"
+                  onChange={(event) =>
+                    setPreviewMargin(Number(event.currentTarget.value))
+                  }
+                />
+                <output>{previewMargin}px</output>
+              </label>
+            ) : null}
             <span>{lineCount} linhas</span>
             <span>{wordCount} palavras</span>
             <span>UTF-8</span>
@@ -622,6 +980,15 @@ export default function App() {
           onSave={() => void saveAndContinue()}
           onDiscard={() => void discardAndContinue()}
           onCancel={() => setPendingAction(null)}
+        />
+      ) : null}
+
+      {workspaceDialog ? (
+        <WorkspaceActionDialog
+          dialog={workspaceDialog}
+          busy={isBusy}
+          onConfirm={(value) => void submitWorkspaceDialog(value)}
+          onCancel={() => setWorkspaceDialog(null)}
         />
       ) : null}
 
@@ -754,6 +1121,91 @@ function FolderEmptyState({ onOpenFile }: { onOpenFile: () => Promise<void> }) {
         Abrir arquivo
       </button>
     </section>
+  );
+}
+
+function WorkspaceActionDialog({
+  dialog,
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  dialog: WorkspaceDialogState;
+  busy: boolean;
+  onConfirm: (value?: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(
+    dialog.kind === "rename" ? dialog.node.name : "",
+  );
+  const isDelete = dialog.kind === "delete";
+  const title =
+    dialog.kind === "create-file"
+      ? "Novo arquivo Markdown"
+      : dialog.kind === "create-folder"
+        ? "Nova pasta"
+        : dialog.kind === "rename"
+          ? "Renomear item"
+          : "Excluir item";
+
+  return (
+    <div className="modal-backdrop">
+      <form
+        className="confirmation-dialog workspace-action-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="workspace-action-title"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (isDelete || value.trim()) onConfirm(value.trim());
+        }}
+      >
+        <div className={`dialog-icon ${isDelete ? "is-danger" : ""}`}>
+          {isDelete ? <TriangleAlert size={20} /> : <FilePlus2 size={20} />}
+        </div>
+        <div>
+          <h2 id="workspace-action-title">{title}</h2>
+          {isDelete ? (
+            <p>
+              “{dialog.node.name}” será excluído permanentemente. Pastas só
+              podem ser excluídas quando estiverem vazias.
+            </p>
+          ) : (
+            <label className="dialog-field">
+              <span>Nome</span>
+              <input
+                autoFocus
+                value={value}
+                placeholder={
+                  dialog.kind === "create-file" ? "minhas-notas.md" : "Nome"
+                }
+                onChange={(event) => setValue(event.currentTarget.value)}
+              />
+              {dialog.kind === "create-file" ? (
+                <small>A extensão .md será adicionada automaticamente.</small>
+              ) : null}
+            </label>
+          )}
+        </div>
+        <div className="dialog-actions">
+          <button
+            type="button"
+            className="ghost-button"
+            disabled={busy}
+            onClick={onCancel}
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            className={isDelete ? "danger-button" : "primary-button"}
+            disabled={busy || (!isDelete && !value.trim())}
+          >
+            {isDelete ? "Excluir" : "Confirmar"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
