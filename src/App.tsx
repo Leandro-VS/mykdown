@@ -1357,7 +1357,7 @@ function WelcomeScreen({
       </div>
       <div className="welcome-copy">
         <h1>{greeting}</h1>
-        <p>Meu Editor de Markdown</p>
+        <p>Leitor e Editor de markdown minimalista</p>
       </div>
       <div className="welcome-actions">
         <button

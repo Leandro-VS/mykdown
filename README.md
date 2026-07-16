@@ -2,7 +2,7 @@
 
 Editor Markdown minimalista para macOS, pensado para abrir arquivos e pastas comuns do sistema sem vault, importação ou banco de dados.
 
-O Mykdown está na versão oficial `1.2.0`. O filesystem é a fonte da verdade e o primeiro alvo é exclusivamente um Mac Apple Silicon para uso pessoal. Não houve um MVP separado ou descartável: toda implementação faz parte da base de produção.
+O Mykdown está na versão oficial `1.2.1`. O filesystem é a fonte da verdade e o primeiro alvo é exclusivamente um Mac Apple Silicon para uso pessoal. Não houve um MVP separado ou descartável: toda implementação faz parte da base de produção.
 
 A versão oficial inclui Home com arquivos recentes, editor e preview, Mermaid,
 Flowchart, busca fuzzy, integração com Finder, temas do sistema e o pacote Nord,
