@@ -46,4 +46,4 @@ de cada release.
 - executar `npm run release:check`;
 - fechar o Mykdown e executar `npm run install:local`;
 - confirmar que preferências e recentes permanecem;
-- confirmar a versão exibida como `1.0.0` no bundle instalado.
+- confirmar que a versão exibida corresponde ao release atual.

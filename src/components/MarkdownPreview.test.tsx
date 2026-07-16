@@ -13,4 +13,20 @@ describe("MarkdownPreview", () => {
     expect(html).not.toContain("<script");
     expect(html).not.toContain("javascript:");
   });
+
+  it("keeps multiline fenced code inside a preformatted block", () => {
+    const html = renderToStaticMarkup(
+      <MarkdownPreview
+        content={
+          '```python\nprint("primeira linha")\nprint("segunda linha")\n```'
+        }
+      />,
+    );
+
+    expect(html).toContain('class="code-block-shell"');
+    expect(html).toContain("<pre><code");
+    expect(html).toContain('class="hljs language-python"');
+    expect(html).toContain("primeira linha");
+    expect(html).toContain("segunda linha");
+  });
 });

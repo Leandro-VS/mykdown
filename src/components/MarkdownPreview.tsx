@@ -30,8 +30,13 @@ export function MarkdownPreview({
         rehypePlugins={[rehypeSanitize]}
         components={{
           pre({ children }) {
-            if (isValidElement(children) && children.type !== "code") {
-              return children;
+            if (isValidElement<{ className?: string }>(children)) {
+              const language = /language-([\w-]+)/.exec(
+                children.props.className ?? "",
+              )?.[1];
+              if (language && pluginRegistry.getCodeBlockRenderer(language)) {
+                return children;
+              }
             }
             return <CodeBlockShell>{children}</CodeBlockShell>;
           },
