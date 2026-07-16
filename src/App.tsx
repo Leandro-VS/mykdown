@@ -1357,8 +1357,10 @@ function WelcomeScreen({
         M<span>↓</span>
       </div>
       <div className="welcome-copy">
-        <CurrentWeatherIcon />
-        <h1>{greeting}</h1>
+        <div className="welcome-greeting">
+          <h1>{greeting}</h1>
+          <CurrentWeatherIcon />
+        </div>
         <p>Leitor e Editor de markdown minimalista</p>
       </div>
       <div className="welcome-actions">

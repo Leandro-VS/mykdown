@@ -93,16 +93,11 @@ export function CurrentWeatherIcon() {
       className={`current-weather${weather ? "" : " current-weather-pending"}`}
       role="img"
       aria-label={label}
-      title={label}
+      title={`${label}. Dados meteorológicos: Open-Meteo`}
     >
       <span className="weather-icon-shell" aria-hidden="true">
         <Icon size={28} strokeWidth={1.65} />
       </span>
-      {weather ? (
-        <span className="weather-attribution" aria-hidden="true">
-          Open-Meteo
-        </span>
-      ) : null}
     </div>
   );
 }
